@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
 import com.example.blesstify.presentation.player.PlayerViewModel
+import com.example.blesstify.presentation.user.UserViewModel
 import com.example.blesstify.presentation.ui.navigation.MainTab
 
 @Composable
@@ -45,6 +46,8 @@ fun MainScreen(
     playerViewModel: PlayerViewModel = hiltViewModel()
 ) {
     val notificationViewModel: com.example.blesstify.presentation.ui.notification.NotificationViewModel = hiltViewModel()
+    val userViewModel: UserViewModel = hiltViewModel()
+    val userState by userViewModel.uiState.collectAsState()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
     val currentSong by playerViewModel.currentSong.collectAsState()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
@@ -59,7 +62,16 @@ fun MainScreen(
     }
 
     Scaffold(
-        topBar = { MainTopBar(unreadCount = unreadCount, onNotificationClick = onNavigateToNotification) },
+        topBar = {
+            MainTopBar(
+                unreadCount = unreadCount,
+                userPhotoUrl = userState.user?.photoUrl,
+                userName = userState.user?.displayName ?: "User",
+                selectedTab = selectedTab,
+                onNotificationClick = onNavigateToNotification,
+                onProfileClick = { selectedTabRoute = MainTab.Profile.route }
+            )
+        },
         bottomBar = {
             Column {
                 currentSong?.let { song ->
@@ -113,18 +125,93 @@ fun MainScreen(
 }
 
 @Composable
-fun MainTopBar(unreadCount: Int, onNotificationClick: () -> Unit) {
+fun MainTopBar(
+    unreadCount: Int,
+    userPhotoUrl: String?,
+    userName: String,
+    selectedTab: MainTab,
+    onNotificationClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val greeting = when {
+        hour < 12 -> "Good morning"
+        hour < 18 -> "Good afternoon"
+        else -> "Good evening"
+    }
+
+    val subtitle = when (selectedTab) {
+        MainTab.Explore -> "Discover something new"
+        MainTab.Search -> "Find your favorite tracks"
+        MainTab.Focus -> "Time to focus"
+        MainTab.Library -> "Your music collection"
+        MainTab.Profile -> "Manage your account"
+        else -> "Discover something new"
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp)
+            .padding(top = 16.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = Icons.Default.Menu, contentDescription = null, tint = Color.White)
-        Text("Blessify", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
+        // Left side: Avatar + Greeting
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color.DarkGray)
+                    .clickable { onProfileClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (!userPhotoUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = userPhotoUrl,
+                        contentDescription = "Profile",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column {
+                Text(
+                    text = "$greeting, $userName \uD83D\uDC4B",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
         
+        // Right side: Icons
         Row(verticalAlignment = Alignment.CenterVertically) {
             BadgedBox(
                 badge = {
@@ -134,24 +221,21 @@ fun MainTopBar(unreadCount: Int, onNotificationClick: () -> Unit) {
                         }
                     }
                 },
-                modifier = Modifier.clickable { onNotificationClick() }
+                modifier = Modifier.padding(horizontal = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notifications",
-                    tint = Color.White
-                )
+                IconButton(onClick = onNotificationClick, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Notifications",
+                        tint = Color.White
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.DarkGray)
-            )
         }
     }
 }
+
+
 
 @Composable
 fun MainBottomBar(selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {

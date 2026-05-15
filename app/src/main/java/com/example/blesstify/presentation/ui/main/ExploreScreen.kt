@@ -45,8 +45,6 @@ fun ExploreScreen(
     ) {
         item {
             Spacer(modifier = Modifier.height(24.dp))
-            HeaderSection(uiState.greeting, uiState.displayName)
-            Spacer(modifier = Modifier.height(32.dp))
             uiState.featuredSong?.let { song ->
                 FeaturedSection(song = song, onClick = { onFeaturedClick(song) })
             }
@@ -71,14 +69,6 @@ fun ExploreScreen(
             }
             Spacer(modifier = Modifier.height(100.dp)) // Bottom Nav padding
         }
-    }
-}
-
-@Composable
-fun HeaderSection(greeting: String, displayName: String) {
-    Column {
-        Text("$greeting, $displayName 👋", style = MaterialTheme.typography.displaySmall, color = Color.White, fontWeight = FontWeight.Bold)
-        Text("Here's what we have for your session.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
