@@ -1,0 +1,173 @@
+package com.example.blesstify.presentation.ui.login
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.blesstify.core.error.AppError
+import com.example.blesstify.presentation.auth.AuthUiEvent
+import com.example.blesstify.presentation.auth.AuthViewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.example.blesstify.R
+
+@Composable
+fun LoginScreen(
+    viewModel: AuthViewModel = hiltViewModel(),
+    onNavigateToRegister: () -> Unit,
+    onNavigateToMain: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            account?.idToken?.let { idToken ->
+                viewModel.onEvent(AuthUiEvent.SubmitGoogle(idToken))
+            } ?: run {
+                viewModel.onEvent(AuthUiEvent.GoogleSignInFailed("Google Sign-In failed: No ID Token"))
+            }
+        } catch (e: ApiException) {
+            viewModel.onEvent(AuthUiEvent.GoogleSignInFailed("Google Sign-In failed: ${e.statusCode}"))
+        }
+    }
+
+    // Chuyển hướng khi đã đăng nhập thành công
+    LaunchedEffect(uiState.authState) {
+        if (uiState.authState is com.example.blesstify.domain.auth.AuthState.Authenticated) {
+            onNavigateToMain()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(64.dp))
+
+        // Header / Logo
+        Text("C", fontSize = 48.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Text("Blessify", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Text(
+            text = "Welcome Back",
+            style = MaterialTheme.typography.headlineLarge,
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Please sign in to continue your journey.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp, bottom = 40.dp)
+        )
+
+        // Inputs
+        OutlinedTextField(
+            value = uiState.email,
+            onValueChange = { viewModel.onEvent(AuthUiEvent.EmailChanged(it)) },
+            label = { Text("Email Address") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = uiState.password,
+            onValueChange = { viewModel.onEvent(AuthUiEvent.PasswordChanged(it)) },
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        if (uiState.error != null) {
+            Text(
+                text = mapErrorMessage(uiState.error!!),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        Button(
+            onClick = { viewModel.onEvent(AuthUiEvent.SubmitLogin) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            enabled = !uiState.isLoading
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            } else {
+                Text("Log In", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(context.getString(R.string.default_web_client_id))
+                    .requestEmail()
+                    .build()
+                val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                // Sign out first to always show the account picker
+                googleSignInClient.signOut().addOnCompleteListener {
+                    launcher.launch(googleSignInClient.signInIntent)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            enabled = !uiState.isLoading
+        ) {
+            Text("Sign in with Google", fontWeight = FontWeight.Bold, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(onClick = onNavigateToRegister) {
+            Text("Don't have an account? Sign Up", color = Color.White)
+        }
+    }
+}
+
+private fun mapErrorMessage(error: AppError): String {
+    return when (error) {
+        AppError.Network -> "Network connection error"
+        AppError.InvalidCredentials -> "Invalid email or password"
+        AppError.NotFound -> "User not found"
+        AppError.EmailAlreadyInUse -> "Email is already in use"
+        is AppError.Unknown -> error.message ?: "An unknown error occurred"
+        else -> "An error occurred. Please try again."
+    }
+}
