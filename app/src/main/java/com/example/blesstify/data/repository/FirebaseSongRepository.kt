@@ -280,24 +280,59 @@ class FirebaseSongRepository(
     }
 
     override fun getTrendingSongs(limit: Int, monthsBack: Int): Flow<Resource<List<Song>>> = flow {
+        val TAG = "RecommendForToday"
+        Log.d(TAG, "Starting getTrendingSongs flow. Limit: $limit, MonthsBack: $monthsBack")
         emit(Resource.Loading())
+        
         try {
             val calendar = java.util.Calendar.getInstance()
             calendar.add(java.util.Calendar.MONTH, -monthsBack)
             val cutoffTimestamp = Timestamp(calendar.time)
+            Log.d(TAG, "Cutoff date for trending: ${calendar.time}")
 
-            val snapshots = firestore.collection(FirestoreKeys.SONGS)
+            // Thử query có điều kiện thời gian (Yêu cầu Index)
+            try {
+                Log.d(TAG, "Attempting primary query (Public + Recent)...")
+                val snapshots = firestore.collection(FirestoreKeys.SONGS)
+                    .whereEqualTo("isPublic", true)
+                    .whereGreaterThanOrEqualTo("createdAt", cutoffTimestamp)
+                    .get()
+                    .await()
+                
+                val songs = snapshots.documents
+                    .mapNotNull { it.toSong() }
+                    .sortedByDescending { it.playCount + it.likeCount }
+                    .take(limit)
+
+                if (songs.isNotEmpty()) {
+                    Log.d(TAG, "Primary query successful. Found ${songs.size} trending songs.")
+                    emit(Resource.Success(songs))
+                    return@flow
+                } else {
+                    Log.d(TAG, "Primary query returned empty results.")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Primary query failed (likely missing index): ${e.message}")
+            }
+
+            // Fallback: Lấy tất cả bài public nếu query trên lỗi hoặc không có bài mới
+            Log.d(TAG, "Executing fallback query (All Public songs)...")
+            val allPublicSnapshots = firestore.collection(FirestoreKeys.SONGS)
                 .whereEqualTo("isPublic", true)
-                .whereGreaterThanOrEqualTo("createdAt", cutoffTimestamp)
+                .limit(50)
                 .get()
                 .await()
-            val songs = snapshots.documents
+            
+            val allSongs = allPublicSnapshots.documents
                 .mapNotNull { it.toSong() }
                 .sortedByDescending { it.playCount + it.likeCount }
                 .take(limit)
-            emit(Resource.Success(songs))
+                
+            Log.d(TAG, "Fallback successful. Found ${allSongs.size} public songs.")
+            emit(Resource.Success(allSongs))
+
         } catch (e: Exception) {
-            Log.e("FirebaseSongRepo", "getTrendingSongs failed: ${e.message}", e)
+            Log.e(TAG, "CRITICAL FAILURE in getTrendingSongs: ${e.message}", e)
             emit(Resource.Error(AppError.Unknown(e.message)))
         }
     }

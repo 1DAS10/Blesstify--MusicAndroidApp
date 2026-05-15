@@ -1,5 +1,6 @@
 package com.example.blesstify.presentation.ui.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.blesstify.core.utils.Resource
@@ -71,23 +72,31 @@ class ExploreViewModel @Inject constructor(
 
                 // Load Trending Songs
                 launch {
+                    val TAG = "RecommendForToday"
                     try {
+                        Log.d(TAG, "ViewModel: Requesting trending songs...")
                         getTrendingSongsUseCase(limit = 10, monthsBack = 2).collect { resource ->
-                            if (resource is Resource.Success) {
-                                val trendingSongs = resource.data ?: emptyList()
-                                _uiState.update { 
-                                    it.copy(
-                                        recommendedSongs = trendingSongs,
-                                        // Set the most popular song as featured if available
-                                        featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
-                                    ) 
+                            when (resource) {
+                                is Resource.Success -> {
+                                    val trendingSongs = resource.data ?: emptyList()
+                                    Log.d(TAG, "ViewModel: Received ${trendingSongs.size} songs from repository.")
+                                    _uiState.update { 
+                                        it.copy(
+                                            recommendedSongs = trendingSongs,
+                                            featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
+                                        ) 
+                                    }
                                 }
-                            } else if (resource is Resource.Error) {
-                                android.util.Log.e("ExploreVM", "Trending songs failed: ${resource.error}")
+                                is Resource.Error -> {
+                                    Log.e(TAG, "ViewModel: Error from repository: ${resource.error}")
+                                }
+                                is Resource.Loading -> {
+                                    Log.d(TAG, "ViewModel: Trending data is loading...")
+                                }
                             }
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("ExploreVM", "Trending load failed", e)
+                        Log.e(TAG, "ViewModel: Trending launch exception: ${e.message}", e)
                     }
                 }
             }
