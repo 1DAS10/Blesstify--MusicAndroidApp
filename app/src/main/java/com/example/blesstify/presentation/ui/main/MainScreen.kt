@@ -38,6 +38,8 @@ fun MainScreen(
     onNavigateToAIFocus: () -> Unit,
     onNavigateToNotification: () -> Unit,
     onNavigateToCategory: (String) -> Unit,
+    onNavigateToAlbum: (String) -> Unit,
+    onNavigateToArtist: (String) -> Unit,
     onOpenPlayer: () -> Unit,
     onLogout: () -> Unit,
     playerViewModel: PlayerViewModel = hiltViewModel()
@@ -95,7 +97,9 @@ fun MainScreen(
                 MainTab.Library -> com.example.blesstify.presentation.ui.library.LibraryMainScreen(
                     onOpenPlaylist = { playlistId -> onNavigateToPlaylist(playlistId) },
                     onCreatePlaylist = onNavigateToCreatePlaylist,
-                    onUploadClick = onNavigateToUpload
+                    onUploadClick = onNavigateToUpload,
+                    onOpenAlbum = onNavigateToAlbum,
+                    onOpenArtist = onNavigateToArtist
                 )
                 MainTab.Profile -> com.example.blesstify.presentation.ui.profile.ProfileScreen(
                     onLogout = onLogout,

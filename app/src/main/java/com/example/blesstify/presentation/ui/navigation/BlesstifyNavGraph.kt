@@ -107,6 +107,8 @@ fun BlessifyNavGraph(
                 onNavigateToAIFocus = { navController.navigate(Screen.AIFocus.route) },
                 onNavigateToNotification = { navController.navigate(Screen.Notification.route) },
                 onNavigateToCategory = { genre -> navController.navigate(Screen.CategoryDetail.createRoute(genre)) },
+                onNavigateToAlbum = { albumName -> navController.navigate(Screen.AlbumDetail.createRoute(albumName)) },
+                onNavigateToArtist = { artistName -> navController.navigate(Screen.ArtistDetail.createRoute(artistName)) },
                 onOpenPlayer = { navController.navigate(Screen.Player.route) },
                 onLogout = { authViewModel.onEvent(AuthUiEvent.SignOut) }
             )
@@ -172,6 +174,36 @@ fun BlessifyNavGraph(
                 onBack = { navController.popBackStack() },
                 onNavigateToPlayer = { songs, startIndex ->
                     playerViewModel.playFromList(songs, startIndex, source = "category")
+                    navController.navigate(Screen.Player.route)
+                }
+            )
+        }
+        composable(
+            route = Screen.AlbumDetail.route,
+            arguments = listOf(navArgument("albumName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val albumName = android.net.Uri.decode(backStackEntry.arguments?.getString("albumName") ?: "")
+            com.example.blesstify.presentation.ui.library.LibraryDetailScreen(
+                type = "album",
+                name = albumName,
+                onBack = { navController.popBackStack() },
+                onNavigateToPlayer = { songs, startIndex ->
+                    playerViewModel.playFromList(songs, startIndex, source = "album")
+                    navController.navigate(Screen.Player.route)
+                }
+            )
+        }
+        composable(
+            route = Screen.ArtistDetail.route,
+            arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val artistName = android.net.Uri.decode(backStackEntry.arguments?.getString("artistName") ?: "")
+            com.example.blesstify.presentation.ui.library.LibraryDetailScreen(
+                type = "artist",
+                name = artistName,
+                onBack = { navController.popBackStack() },
+                onNavigateToPlayer = { songs, startIndex ->
+                    playerViewModel.playFromList(songs, startIndex, source = "artist")
                     navController.navigate(Screen.Player.route)
                 }
             )

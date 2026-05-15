@@ -90,6 +90,11 @@ class GetPublicPlaylistsUseCase(private val playlistRepository: PlaylistReposito
         playlistRepository.getPublicPlaylists(limit)
 }
 
+class GetLikedPlaylistsUseCase(private val playlistRepository: PlaylistRepository) {
+    suspend operator fun invoke(userId: String): List<Playlist> =
+        playlistRepository.getLikedPlaylists(userId)
+}
+
 class GetUserPlaylistsUseCase(private val playlistRepository: PlaylistRepository) {
     suspend operator fun invoke(userId: String, limit: Int = 50): List<Playlist> =
         playlistRepository.getUserPlaylists(userId, limit)
@@ -193,6 +198,15 @@ class GetSongsByIdsUseCase(private val songRepository: SongRepository) {
 
 class GetPublicSongsUseCase(private val songRepository: SongRepository) {
     operator fun invoke(limit: Int = 10): Flow<Resource<List<Song>>> = songRepository.getPublicSongs(limit)
+}
+
+class GetUserSongsUseCase(private val songRepository: SongRepository) {
+    operator fun invoke(userId: String): Flow<Resource<List<Song>>> = songRepository.getUserSongs(userId)
+}
+
+class GetTrendingSongsUseCase(private val songRepository: SongRepository) {
+    operator fun invoke(limit: Int = 10, monthsBack: Int = 2): Flow<Resource<List<Song>>> =
+        songRepository.getTrendingSongs(limit, monthsBack)
 }
 
 class AddSongUseCase(private val songRepository: SongRepository) {

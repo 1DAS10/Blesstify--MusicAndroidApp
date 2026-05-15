@@ -31,7 +31,12 @@ data class UserUiState(
     val localeInput: String = "",
     val avatarLocalUri: Uri? = null,
     val subscription: com.example.blesstify.domain.model.Subscription? = null,
-    val error: AppError? = null
+    val error: AppError? = null,
+    val likedSongsCount: Int = 0,
+    val playlistsCount: Int = 0,
+    val totalHoursListened: Int = 0,
+    val weeklyFocusData: List<Float> = emptyList(),
+    val weeklyFocusTotalHours: String = "0h 0m"
 )
 
 sealed interface UserUiEvent {
@@ -52,7 +57,10 @@ class UserViewModel @Inject constructor(
     private val getUserUseCase: GetUserUseCase,
     private val getSubscriptionUseCase: com.example.blesstify.domain.usecase.GetSubscriptionUseCase,
     private val updateUserUseCase: UpdateUserUseCase,
-    private val updateUserAvatarUseCase: UpdateUserAvatarUseCase
+    private val updateUserAvatarUseCase: UpdateUserAvatarUseCase,
+    private val getLikedSongIdsUseCase: com.example.blesstify.domain.usecase.GetLikedSongIdsUseCase,
+    private val getUserPlaylistsUseCase: com.example.blesstify.domain.usecase.GetUserPlaylistsUseCase,
+    private val observeListeningHistoryUseCase: com.example.blesstify.domain.usecase.ObserveListeningHistoryUseCase
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(UserUiState())
     val uiState: StateFlow<UserUiState> = _uiState.asStateFlow()
@@ -107,7 +115,7 @@ class UserViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             
-            // Parallel fetch
+            // Parallel fetch for basic user info
             val userJob = viewModelScope.launch {
                 when (val result = getUserUseCase(userId)) {
                     is UserResult.Success -> _uiState.update { it.copy(user = result.data) }
@@ -123,10 +131,76 @@ class UserViewModel @Inject constructor(
                     is Resource.Loading -> Unit
                 }
             }
+
+            // Stats fetching
+            val statsJob = viewModelScope.launch {
+                try {
+                    val likedSongs = getLikedSongIdsUseCase(userId)
+                    val playlists = getUserPlaylistsUseCase(userId)
+                    _uiState.update {
+                        it.copy(
+                            likedSongsCount = likedSongs.size,
+                            playlistsCount = playlists.size
+                        )
+                    }
+                } catch (e: Exception) {
+                    // Ignore stats error
+                }
+            }
+
+            // History Observer for Weekly Focus
+            viewModelScope.launch {
+                observeListeningHistoryUseCase(userId, limit = 1000).collectLatest { historyList ->
+                    calculateListeningStats(historyList)
+                }
+            }
             
             userJob.join()
             subJob.join()
             _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    private fun calculateListeningStats(historyList: List<com.example.blesstify.domain.model.ListeningHistory>) {
+        if (historyList.isEmpty()) {
+            _uiState.update { it.copy(totalHoursListened = 0, weeklyFocusData = emptyList(), weeklyFocusTotalHours = "0h 0m") }
+            return
+        }
+
+        val totalSeconds = historyList.sumOf { it.durationSec.toLong() }
+        val totalHours = (totalSeconds / 3600).toInt()
+
+        // Calculate last 7 days distribution
+        val now = System.currentTimeMillis()
+        val millisInDay = 86400000L
+        val weekData = FloatArray(7) { 0f }
+        var weeklyTotalSeconds = 0L
+
+        historyList.forEach { item ->
+            val itemTime = item.playedAt
+            val diffMillis = now - itemTime
+            if (diffMillis >= 0) {
+                val daysAgo = (diffMillis / millisInDay).toInt()
+                if (daysAgo in 0..6) {
+                    // Index 6 is today, 0 is 6 days ago (Monday if today is Sunday)
+                    // We'll map it backwards: 6 - daysAgo is the chronological index
+                    val index = 6 - daysAgo
+                    weekData[index] += item.durationSec.toFloat() / 3600f // Convert to hours
+                    weeklyTotalSeconds += item.durationSec
+                }
+            }
+        }
+
+        val weeklyHours = weeklyTotalSeconds / 3600
+        val weeklyMinutes = (weeklyTotalSeconds % 3600) / 60
+        val weeklyFocusTotal = "${weeklyHours}h ${weeklyMinutes}m"
+
+        _uiState.update { 
+            it.copy(
+                totalHoursListened = totalHours,
+                weeklyFocusData = weekData.toList(),
+                weeklyFocusTotalHours = weeklyFocusTotal
+            ) 
         }
     }
 

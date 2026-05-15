@@ -20,6 +20,12 @@ sealed class Screen(val route: String) {
     object CategoryDetail : Screen("category_detail/{genre}") {
         fun createRoute(genre: String) = "category_detail/${Uri.encode(genre)}"
     }
+    object AlbumDetail : Screen("album_detail/{albumName}") {
+        fun createRoute(albumName: String) = "album_detail/${Uri.encode(albumName)}"
+    }
+    object ArtistDetail : Screen("artist_detail/{artistName}") {
+        fun createRoute(artistName: String) = "artist_detail/${Uri.encode(artistName)}"
+    }
 }
 
 sealed class MainTab(val route: String, val label: String) {

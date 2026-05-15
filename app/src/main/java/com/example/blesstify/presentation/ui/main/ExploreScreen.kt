@@ -238,7 +238,7 @@ fun TrackItem(song: Song, onClick: () -> Unit) {
                 color = Color.White.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("✨ AI PICKED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                Text("🔥 TRENDING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
             }
         }
     }

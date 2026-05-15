@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,9 +38,12 @@ fun LibraryMainScreen(
     onOpenPlaylist: (String) -> Unit,
     onCreatePlaylist: () -> Unit,
     onUploadClick: () -> Unit,
+    onOpenAlbum: (String) -> Unit = {},
+    onOpenArtist: (String) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedTab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("Playlists") }
 
     // Reload playlists whenever this screen resumes (e.g. after CreatePlaylist)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -86,9 +91,9 @@ fun LibraryMainScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        TabLabel(text = "Playlists", isActive = true, onClick = {})
-                        TabLabel(text = "Albums", isActive = false, onClick = {})
-                        TabLabel(text = "Artists", isActive = false, onClick = {})
+                        TabLabel(text = "Playlists", isActive = selectedTab == "Playlists", onClick = { selectedTab = "Playlists" })
+                        TabLabel(text = "Albums", isActive = selectedTab == "Albums", onClick = { selectedTab = "Albums" })
+                        TabLabel(text = "Artists", isActive = selectedTab == "Artists", onClick = { selectedTab = "Artists" })
                         TabLabel(text = "Upload", isActive = false, onClick = onUploadClick)
                     }
                 }
@@ -119,31 +124,92 @@ fun LibraryMainScreen(
                     }
                 }
             } else {
-                items(uiState.playlists) { playlist ->
-                    PlaylistCard(
-                        playlist = playlist,
-                        onClick = { onOpenPlaylist(playlist.id) }
-                    )
-                }
-
-                item {
-                    CreatePlaylistCard(onClick = onCreatePlaylist)
-                }
-
-                if (uiState.playlists.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "No playlists yet. Create one!",
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodyMedium
+                when (selectedTab) {
+                    "Playlists" -> {
+                        items(uiState.playlists) { playlist ->
+                            PlaylistCard(
+                                playlist = playlist,
+                                onClick = { onOpenPlaylist(playlist.id) }
                             )
+                        }
+
+                        item {
+                            CreatePlaylistCard(onClick = onCreatePlaylist)
+                        }
+
+                        if (uiState.playlists.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "No playlists yet. Create one!",
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    "Albums" -> {
+                        items(uiState.albums) { album ->
+                            AlbumCard(
+                                album = album,
+                                onClick = { onOpenAlbum(album.name) }
+                            )
+                        }
+                        if (uiState.albums.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "No liked albums found.",
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    "Artists" -> {
+                        items(uiState.artists) { artist ->
+                            ArtistCard(
+                                artist = artist,
+                                onClick = { onOpenArtist(artist.name) }
+                            )
+                        }
+                        if (uiState.artists.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "No liked artists found.",
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        if (selectedTab == "Playlists") {
+            FloatingActionButton(
+                onClick = onCreatePlaylist,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 24.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Create Playlist")
             }
         }
 
@@ -256,5 +322,99 @@ private fun CreatePlaylistCard(onClick: () -> Unit) {
             Text("Create Playlist", color = Color.White, fontWeight = FontWeight.SemiBold)
             Text("New Collection", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
         }
+    }
+}
+
+@Composable
+private fun AlbumCard(album: LibraryAlbum, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(190.dp),
+        color = Color.White.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .height(90.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.05f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (album.coverUrl != null) {
+                    AsyncImage(
+                        model = album.coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Default.MusicNote, null, tint = Color.Gray, modifier = Modifier.size(32.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                album.name,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                album.artist,
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtistCard(artist: LibraryArtist, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color.White.copy(alpha = 0.05f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (artist.coverUrl != null) {
+                AsyncImage(
+                    model = artist.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            artist.name,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            "${artist.songs.size} Songs",
+            color = Color.Gray,
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }

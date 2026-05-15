@@ -264,6 +264,44 @@ class FirebaseSongRepository(
         }
     }
 
+    override fun getUserSongs(userId: String): Flow<Resource<List<Song>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val snapshots = firestore.collection(FirestoreKeys.SONGS)
+                .whereEqualTo("ownerId", userId)
+                .get()
+                .await()
+            val songs = snapshots.documents.mapNotNull { it.toSong() }
+            emit(Resource.Success(songs))
+        } catch (e: Exception) {
+            Log.e("FirebaseSongRepo", "getUserSongs failed: ${e.message}", e)
+            emit(Resource.Error(AppError.Unknown(e.message)))
+        }
+    }
+
+    override fun getTrendingSongs(limit: Int, monthsBack: Int): Flow<Resource<List<Song>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val calendar = java.util.Calendar.getInstance()
+            calendar.add(java.util.Calendar.MONTH, -monthsBack)
+            val cutoffTimestamp = Timestamp(calendar.time)
+
+            val snapshots = firestore.collection(FirestoreKeys.SONGS)
+                .whereEqualTo("isPublic", true)
+                .whereGreaterThanOrEqualTo("createdAt", cutoffTimestamp)
+                .get()
+                .await()
+            val songs = snapshots.documents
+                .mapNotNull { it.toSong() }
+                .sortedByDescending { it.playCount + it.likeCount }
+                .take(limit)
+            emit(Resource.Success(songs))
+        } catch (e: Exception) {
+            Log.e("FirebaseSongRepo", "getTrendingSongs failed: ${e.message}", e)
+            emit(Resource.Error(AppError.Unknown(e.message)))
+        }
+    }
+
     override fun getSongsByMood(mood: String): Flow<Resource<List<Song>>> = flow {
         emit(Resource.Loading())
         try {

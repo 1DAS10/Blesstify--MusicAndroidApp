@@ -173,6 +173,14 @@ object UserModule {
         GetPublicSongsUseCase(songRepository)
 
     @Provides
+    fun provideGetUserSongsUseCase(songRepository: SongRepository): com.example.blesstify.domain.usecase.GetUserSongsUseCase =
+        com.example.blesstify.domain.usecase.GetUserSongsUseCase(songRepository)
+
+    @Provides
+    fun provideGetTrendingSongsUseCase(songRepository: SongRepository): com.example.blesstify.domain.usecase.GetTrendingSongsUseCase =
+        com.example.blesstify.domain.usecase.GetTrendingSongsUseCase(songRepository)
+
+    @Provides
     fun provideGetSongsByGenreUseCase(songRepository: SongRepository): GetSongsByGenreUseCase =
         GetSongsByGenreUseCase(songRepository)
 
@@ -192,6 +200,10 @@ object UserModule {
     @Provides
     fun provideGetPublicPlaylistsUseCase(playlistRepository: PlaylistRepository): GetPublicPlaylistsUseCase =
         GetPublicPlaylistsUseCase(playlistRepository)
+
+    @Provides
+    fun provideGetLikedPlaylistsUseCase(playlistRepository: PlaylistRepository): com.example.blesstify.domain.usecase.GetLikedPlaylistsUseCase =
+        com.example.blesstify.domain.usecase.GetLikedPlaylistsUseCase(playlistRepository)
 
     @Provides
     fun provideGetUserPlaylistsUseCase(playlistRepository: PlaylistRepository): GetUserPlaylistsUseCase =

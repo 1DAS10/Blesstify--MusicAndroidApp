@@ -21,6 +21,8 @@ interface SongRepository {
     ): Flow<Resource<String>>
 
     fun getPublicSongs(limit: Int = 10): Flow<Resource<List<Song>>>
+    fun getUserSongs(userId: String): Flow<Resource<List<Song>>>
+    fun getTrendingSongs(limit: Int = 10, monthsBack: Int = 2): Flow<Resource<List<Song>>>
     fun getSongsByMood(mood: String): Flow<Resource<List<Song>>>
     fun getSongsByGenre(genre: String, userId: String? = null): Flow<Resource<List<Song>>>
 

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.blesstify.core.utils.Resource
 import com.example.blesstify.domain.model.Song
-import com.example.blesstify.domain.auth.AuthUser
 import com.example.blesstify.domain.usecase.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -25,11 +24,9 @@ data class ExploreUiState(
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
     private val getPublicSongsUseCase: GetPublicSongsUseCase,
-    private val getListeningHistoryUseCase: GetListeningHistoryUseCase,
-    private val getRecentPlaylistsUseCase: GetRecentPlaylistsUseCase,
-    private val getPublicPlaylistsUseCase: GetPublicPlaylistsUseCase,
-    private val getLatestRecommendationUseCase: GetLatestRecommendationUseCase,
-    private val getSongsByIdsUseCase: GetSongsByIdsUseCase,
+    private val getUserPlaylistsUseCase: GetUserPlaylistsUseCase,
+    private val getLikedPlaylistsUseCase: GetLikedPlaylistsUseCase,
+    private val getTrendingSongsUseCase: GetTrendingSongsUseCase,
     private val getCurrentUserUseCase: GetCurrentUserUseCase
 ) : ViewModel() {
 
@@ -54,54 +51,43 @@ class ExploreViewModel @Inject constructor(
             }
             _uiState.update { it.copy(displayName = name, greeting = greeting) }
 
-            // Load Featured in parallel
-            launch {
-                getPublicSongsUseCase(5).collect { resource ->
-                    if (resource is Resource.Success) {
-                        _uiState.update { it.copy(featuredSong = resource.data?.firstOrNull()) }
-                    }
-                }
-            }
-
             val uid = user?.id ?: ""
             if (uid.isNotBlank()) {
-                // Load History Playlists in parallel
+                // Load Playlists (Liked + Own)
                 launch {
                     try {
-                        val playlists = getRecentPlaylistsUseCase(uid, 10)
-                        if (playlists.isNotEmpty()) {
-                            _uiState.update { it.copy(continueListeningPlaylists = playlists) }
-                        } else {
-                            val publicPlaylists = getPublicPlaylistsUseCase()
-                            _uiState.update { it.copy(continueListeningPlaylists = publicPlaylists.take(10)) }
-                        }
+                        val likedPlaylists = getLikedPlaylistsUseCase(uid)
+                        val ownPlaylists = getUserPlaylistsUseCase(uid, 50)
+                        
+                        val mergedPlaylists = (likedPlaylists + ownPlaylists)
+                            .distinctBy { it.id }
+                            .take(10)
+                        
+                        _uiState.update { it.copy(continueListeningPlaylists = mergedPlaylists) }
                     } catch (e: Exception) {
-                        // Silent fail
+                        android.util.Log.e("ExploreVM", "Playlists load failed", e)
                     }
                 }
 
-                // Load Recommendations in parallel
+                // Load Trending Songs
                 launch {
                     try {
-                        val recommendation = getLatestRecommendationUseCase(uid)
-                        if (recommendation != null && recommendation.songIds.isNotEmpty()) {
-                            getSongsByIdsUseCase(recommendation.songIds).collect { resource ->
-                                if (resource is Resource.Success) {
-                                    _uiState.update { it.copy(recommendedSongs = resource.data ?: emptyList()) }
+                        getTrendingSongsUseCase(limit = 10, monthsBack = 2).collect { resource ->
+                            if (resource is Resource.Success) {
+                                val trendingSongs = resource.data ?: emptyList()
+                                _uiState.update { 
+                                    it.copy(
+                                        recommendedSongs = trendingSongs,
+                                        // Set the most popular song as featured if available
+                                        featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
+                                    ) 
                                 }
-                            }
-                        } else {
-                            // Fallback
-                            getPublicSongsUseCase(10).collect { resource ->
-                                if (resource is Resource.Success) {
-                                    _uiState.update { it.copy(recommendedSongs = resource.data ?: emptyList()) }
-                                } else if (resource is Resource.Error) {
-                                    android.util.Log.e("ExploreVM", "Fallback songs failed: ${resource.error}")
-                                }
+                            } else if (resource is Resource.Error) {
+                                android.util.Log.e("ExploreVM", "Trending songs failed: ${resource.error}")
                             }
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("ExploreVM", "Recommendation load failed", e)
+                        android.util.Log.e("ExploreVM", "Trending load failed", e)
                     }
                 }
             }

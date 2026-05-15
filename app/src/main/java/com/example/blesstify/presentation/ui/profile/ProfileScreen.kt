@@ -73,9 +73,9 @@ fun ProfileScreen(
                 onEditProfile = { viewModel.onEvent(UserUiEvent.StartEdit) }
             )
             Spacer(modifier = Modifier.height(32.dp))
-            LibraryStats()
+            LibraryStats(state = uiState)
             Spacer(modifier = Modifier.height(32.dp))
-            WeeklyFocus()
+            WeeklyFocus(state = uiState)
             Spacer(modifier = Modifier.height(32.dp))
             PreferenceSection(
                 onAccountClick = { viewModel.onEvent(UserUiEvent.StartEdit) },
@@ -191,13 +191,14 @@ fun ProfileHeader(
 }
 
 @Composable
-fun LibraryStats() {
+fun LibraryStats(state: com.example.blesstify.presentation.user.UserUiState) {
     Column {
         Text("Library Stats", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StatCard("1.2k", "SONGS", Modifier.weight(1f))
-            StatCard("48", "PLAYLISTS", Modifier.weight(1f))
+            val songsStr = if (state.likedSongsCount > 1000) String.format("%.1fk", state.likedSongsCount / 1000f) else state.likedSongsCount.toString()
+            StatCard(songsStr, "LIKED SONGS", Modifier.weight(1f))
+            StatCard(state.playlistsCount.toString(), "PLAYLISTS", Modifier.weight(1f))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Surface(
@@ -210,7 +211,7 @@ fun LibraryStats() {
                 Icon(Icons.Default.Headphones, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text("342", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(state.totalHoursListened.toString(), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     Text("HOURS LISTENED", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -234,14 +235,14 @@ fun StatCard(value: String, label: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun WeeklyFocus() {
+fun WeeklyFocus(state: com.example.blesstify.presentation.user.UserUiState) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column {
                 Text("Weekly Focus", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                 Text("Your listening patterns over the last 7 days.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
             }
-            Text("24h 12m\ntotal", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End)
+            Text("${state.weeklyFocusTotalHours}\ntotal", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End)
         }
         Spacer(modifier = Modifier.height(16.dp))
         Surface(
@@ -250,16 +251,58 @@ fun WeeklyFocus() {
             shape = RoundedCornerShape(16.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.1f))
         ) {
-            // Placeholder for Chart
+            val maxHours = state.weeklyFocusData.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+            val labels = getLast7DaysLabels()
+
             Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { day ->
-                        Text(day, color = Color.Gray, fontSize = 10.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    val data = if (state.weeklyFocusData.size == 7) state.weeklyFocusData else List(7) { 0f }
+                    
+                    data.forEachIndexed { index, hours ->
+                        val heightFraction = (hours / maxHours).coerceIn(0f, 1f)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom, modifier = Modifier.fillMaxHeight()) {
+                            if (hours > 0) {
+                                Text(
+                                    String.format(java.util.Locale.US, "%.1f", hours),
+                                    color = Color.White,
+                                    fontSize = 8.sp,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(20.dp)
+                                    .fillMaxHeight(heightFraction.coerceAtLeast(0.05f))
+                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(labels[index], color = Color.Gray, fontSize = 10.sp)
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun getLast7DaysLabels(): List<String> {
+    val sdf = java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
+    val calendar = java.util.Calendar.getInstance()
+    val labels = mutableListOf<String>()
+    
+    // Go back 6 days
+    calendar.add(java.util.Calendar.DAY_OF_YEAR, -6)
+    
+    for (i in 0..6) {
+        labels.add(sdf.format(calendar.time))
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+    }
+    return labels
 }
 
 @Composable
