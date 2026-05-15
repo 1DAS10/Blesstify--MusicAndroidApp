@@ -66,6 +66,7 @@ class UserViewModel @Inject constructor(
     val uiState: StateFlow<UserUiState> = _uiState.asStateFlow()
 
     private var currentUserId: String? = null
+    private var userDataJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch {
@@ -77,6 +78,7 @@ class UserViewModel @Inject constructor(
                     }
                     else -> {
                         currentUserId = null
+                        userDataJob?.cancel()
                         _uiState.update { it.copy(user = null) }
                     }
                 }
@@ -112,18 +114,19 @@ class UserViewModel @Inject constructor(
     }
 
     private fun loadUser(userId: String) {
-        viewModelScope.launch {
+        userDataJob?.cancel()
+        userDataJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             
             // Parallel fetch for basic user info
-            val userJob = viewModelScope.launch {
+            val userJob = launch {
                 when (val result = getUserUseCase(userId)) {
                     is UserResult.Success -> _uiState.update { it.copy(user = result.data) }
                     is UserResult.Error -> _uiState.update { it.copy(error = result.error) }
                 }
             }
             
-            val subJob = viewModelScope.launch {
+            val subJob = launch {
                 val result = getSubscriptionUseCase(userId)
                 when (result) {
                     is Resource.Success -> _uiState.update { it.copy(subscription = result.data) }
@@ -133,7 +136,7 @@ class UserViewModel @Inject constructor(
             }
 
             // Stats fetching
-            val statsJob = viewModelScope.launch {
+            val statsJob = launch {
                 try {
                     val likedSongs = getLikedSongIdsUseCase(userId)
                     val playlists = getUserPlaylistsUseCase(userId)
@@ -149,9 +152,13 @@ class UserViewModel @Inject constructor(
             }
 
             // History Observer for Weekly Focus
-            viewModelScope.launch {
-                observeListeningHistoryUseCase(userId, limit = 1000).collectLatest { historyList ->
-                    calculateListeningStats(historyList)
+            launch {
+                try {
+                    observeListeningHistoryUseCase(userId, limit = 1000).collectLatest { historyList ->
+                        calculateListeningStats(historyList)
+                    }
+                } catch (e: Exception) {
+                    // Catch cancellation or permission denied to prevent crash
                 }
             }
             

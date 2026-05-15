@@ -53,7 +53,11 @@ fun BlessifyNavGraph(
                 }
             }
             AuthState.Unauthenticated -> {
-                if (currentRoute == Screen.Splash.route || currentRoute == Screen.Main.route) {
+                // Redirect to Login if we are not already on auth screens
+                if (currentRoute != Screen.Login.route && 
+                    currentRoute != Screen.Register.route && 
+                    currentRoute != Screen.Splash.route
+                ) {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                         launchSingleTop = true

@@ -68,6 +68,10 @@ class ListeningHistoryViewModel @Inject constructor(
                 if (state is com.example.blesstify.domain.auth.AuthState.Authenticated) {
                     currentUserId = state.userId
                     loadHistory()
+                } else {
+                    currentUserId = null
+                    historyJob?.cancel()
+                    _uiState.value = _uiState.value.copy(groups = emptyList(), isLoading = false)
                 }
             }
         }
