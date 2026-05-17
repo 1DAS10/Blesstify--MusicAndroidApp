@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.presentation.player.PlayerViewModel
 import com.example.blesstify.presentation.user.UserViewModel
 import com.example.blesstify.presentation.ui.navigation.MainTab
@@ -288,9 +289,10 @@ fun MiniPlayerBar(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!song.coverUrl.isNullOrBlank()) {
+            val artworkUrl = song.listArtworkUrl()
+            if (!artworkUrl.isNullOrBlank()) {
                 AsyncImage(
-                    model = song.coverUrl,
+                    model = artworkUrl,
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)

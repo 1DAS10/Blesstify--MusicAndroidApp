@@ -1,11 +1,15 @@
 package com.example.blesstify.data.repository
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.blesstify.core.error.AppError
 import com.example.blesstify.core.utils.Resource
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.domain.repository.SongRepository
+import com.example.blesstify.util.ImageLoaderFactory
+import com.example.blesstify.util.SongImageUtils
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -24,7 +28,8 @@ import kotlinx.coroutines.CancellationException
 
 class FirebaseSongRepository(
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val storage: FirebaseStorage,
+    private val context: Context
 ) : SongRepository {
 
     private fun DocumentSnapshot.toSong(): Song? {
@@ -37,6 +42,7 @@ class FirebaseSongRepository(
                 album = getString("album"),
                 durationSec = getLong("durationSec")?.toInt() ?: 0,
                 coverUrl = getString("coverUrl"),
+                thumbnailUrl = getString("thumbnailUrl"),
                 audioUrl = getString("audioUrl"),
                 genre = (get("genre") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 moodTags = (get("moodTags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
@@ -53,6 +59,13 @@ class FirebaseSongRepository(
             Log.e("FirebaseSongRepo", "Failed to parse doc ${id}: ${e.message}")
             null
         }
+    }
+
+    private fun preloadSongArtwork(songs: List<Song>) {
+        ImageLoaderFactory.preloadUrls(
+            context = context,
+            urls = songs.map { it.listArtworkUrl() }
+        )
     }
 
     override fun getSong(songId: String): Flow<Resource<Song>> = flow {
@@ -87,6 +100,7 @@ class FirebaseSongRepository(
                         .await()
                     snapshots.documents.mapNotNull { doc -> doc.toSong() }
                 }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -103,6 +117,7 @@ class FirebaseSongRepository(
                 "album" to song.album,
                 "durationSec" to song.durationSec,
                 "coverUrl" to song.coverUrl,
+                "thumbnailUrl" to song.thumbnailUrl,
                 "audioUrl" to song.audioUrl,
                 "genre" to song.genre,
                 "moodTags" to song.moodTags,
@@ -157,12 +172,20 @@ class FirebaseSongRepository(
             audioRef.putFile(audioUri).await()
             val audioDownloadUrl = audioRef.downloadUrl.await().toString()
 
-            // Step 4: Upload cover if provided
             var coverDownloadUrl: String? = null
+            var thumbnailDownloadUrl: String? = null
             if (coverUri != null && coverPath != null) {
                 val coverRef = storage.reference.child(coverPath)
                 coverRef.putFile(coverUri).await()
                 coverDownloadUrl = coverRef.downloadUrl.await().toString()
+
+                val thumbnailBytes = SongImageUtils.createThumbnailBytes(context, coverUri)
+                if (thumbnailBytes != null) {
+                    val thumbnailPath = "songs/$newSongId/cover_thumb/thumb_$coverFileName"
+                    val thumbnailRef = storage.reference.child(thumbnailPath)
+                    thumbnailRef.putBytes(thumbnailBytes).await()
+                    thumbnailDownloadUrl = thumbnailRef.downloadUrl.await().toString()
+                }
             }
 
             // Step 5: Create song document
@@ -172,6 +195,7 @@ class FirebaseSongRepository(
                 "album" to song.album,
                 "audioUrl" to audioDownloadUrl,
                 "coverUrl" to coverDownloadUrl,
+                "thumbnailUrl" to thumbnailDownloadUrl,
                 "durationSec" to song.durationSec,
                 "genre" to song.genre,
                 "moodTags" to song.moodTags,
@@ -241,6 +265,7 @@ class FirebaseSongRepository(
                 song.title.lowercase().contains(queryLower) ||
                     song.artist.lowercase().contains(queryLower)
             }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             Log.e("FirebaseSongRepo", "Search failed: ${e.message}", e)
@@ -257,6 +282,7 @@ class FirebaseSongRepository(
                 .get()
                 .await()
             val songs = snapshots.documents.mapNotNull { it.toSong() }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             Log.e("FirebaseSongRepo", "getPublicSongs failed: ${e.message}", e)
@@ -272,6 +298,7 @@ class FirebaseSongRepository(
                 .get()
                 .await()
             val songs = snapshots.documents.mapNotNull { it.toSong() }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             Log.e("FirebaseSongRepo", "getUserSongs failed: ${e.message}", e)
@@ -306,6 +333,7 @@ class FirebaseSongRepository(
 
                 if (songs.isNotEmpty()) {
                     Log.d(TAG, "Primary query successful. Found ${songs.size} trending songs.")
+                    preloadSongArtwork(songs)
                     emit(Resource.Success(songs))
                     return@flow
                 } else {
@@ -329,6 +357,7 @@ class FirebaseSongRepository(
                 .take(limit)
                 
             Log.d(TAG, "Fallback successful. Found ${allSongs.size} public songs.")
+            preloadSongArtwork(allSongs)
             emit(Resource.Success(allSongs))
 
         } catch (e: Exception) {
@@ -347,6 +376,7 @@ class FirebaseSongRepository(
                 .get()
                 .await()
             val songs = snapshot.documents.mapNotNull { it.toSong() }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             emit(Resource.Error(AppError.Unknown(e.message)))
@@ -383,6 +413,7 @@ class FirebaseSongRepository(
                 }
                 song.copy(genre = normalized)
             }
+            preloadSongArtwork(songs)
             emit(Resource.Success(songs))
         } catch (e: Exception) {
             emit(Resource.Error(AppError.Unknown(e.message)))

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.presentation.player.PlayerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -175,7 +176,7 @@ fun HistoryTrackRow(item: HistoryItem, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
-            model = song?.coverUrl,
+            model = song?.listArtworkUrl(),
             contentDescription = null,
             modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Crop

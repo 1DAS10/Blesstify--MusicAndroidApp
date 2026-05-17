@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.blesstify.domain.model.detailArtworkUrl
 import com.example.blesstify.presentation.player.PlayerViewModel
 import com.example.blesstify.presentation.ui.theme.pressScale
 import kotlin.math.roundToInt
@@ -271,7 +272,7 @@ fun PlayerScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
-                    model = currentSong?.coverUrl,
+                    model = currentSong?.detailArtworkUrl(),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()

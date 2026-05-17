@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Playlist
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -572,7 +573,7 @@ fun AddSongItem(song: Song, onAdd: () -> Unit, isLoading: Boolean = false) {
             ) {
                 if (song.coverUrl != null) {
                     AsyncImage(
-                        model = song.coverUrl,
+                        model = song.listArtworkUrl(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop

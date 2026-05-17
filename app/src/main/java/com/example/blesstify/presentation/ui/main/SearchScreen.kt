@@ -58,6 +58,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import java.util.Locale
 
 @Composable
@@ -423,9 +424,10 @@ fun SongResultItem(song: Song, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                if (!song.coverUrl.isNullOrBlank()) {
+                val artworkUrl = song.listArtworkUrl()
+                if (!artworkUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = song.coverUrl,
+                        model = artworkUrl,
                         contentDescription = "Cover art",
                         modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop

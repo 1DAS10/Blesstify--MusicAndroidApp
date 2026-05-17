@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.blesstify.core.utils.Resource
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.presentation.ui.main.MoodGeneratorViewModel
 
 enum class FocusState { Selection, Timer, Session }
@@ -341,7 +342,7 @@ fun FocusMusicItem(
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
-                model = song.coverUrl,
+                model = song.listArtworkUrl(),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)).background(Color.DarkGray),
                 contentScale = ContentScale.Crop
@@ -528,7 +529,7 @@ fun AIPickedCard(title: String, subtitle: String, songs: List<Song>, onPlayAll: 
 fun SongTrackItem(song: Song) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         AsyncImage(
-            model = song.coverUrl,
+            model = song.listArtworkUrl(),
             contentDescription = null,
             modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.DarkGray),
             contentScale = ContentScale.Crop
@@ -624,7 +625,7 @@ fun FocusSearchItem(song: Song, isAdding: Boolean, onAdd: () -> Unit) {
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
-                model = song.coverUrl,
+                model = song.listArtworkUrl(),
                 contentDescription = null,
                 modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)).background(Color.DarkGray),
                 contentScale = ContentScale.Crop

@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.model.detailArtworkUrl
+import com.example.blesstify.domain.model.listArtworkUrl
 
 @Composable
 fun ExploreScreen(
@@ -87,7 +89,7 @@ fun FeaturedSection(song: Song, onClick: () -> Unit) {
             .clickable { onClick() }
     ) {
         AsyncImage(
-            model = song.coverUrl,
+            model = song.detailArtworkUrl(),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
@@ -214,7 +216,7 @@ fun TrackItem(song: Song, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = song.coverUrl,
+                model = song.listArtworkUrl(),
                 contentDescription = null,
                 modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color.Gray),
                 contentScale = ContentScale.Crop

@@ -23,8 +23,10 @@ import com.google.firebase.storage.FirebaseStorage
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import android.content.Context
 import com.example.blesstify.domain.usecase.CreateUserUseCase
 import com.example.blesstify.domain.usecase.GetUserUseCase
 import com.example.blesstify.domain.usecase.UpdateUserAvatarUseCase
@@ -74,7 +76,16 @@ import com.example.blesstify.domain.usecase.SaveEqualizerSettingsUseCase
 object UserModule {
     @Provides
     @Singleton
-    fun provideFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+    fun provideFirestore(): FirebaseFirestore {
+        return FirebaseFirestore.getInstance().apply {
+            firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                // Keep recent queries/documents on device so next screen loads faster
+                .setPersistenceEnabled(true)
+                // Increase local cache (default small). Tune if needed.
+                .setCacheSizeBytes(100L * 1024L * 1024L) // 100 MB
+                .build()
+        }
+    }
 
     @Provides
     @Singleton
@@ -91,8 +102,9 @@ object UserModule {
     @Singleton
     fun provideSongRepository(
         firestore: FirebaseFirestore,
-        storage: FirebaseStorage
-    ): SongRepository = FirebaseSongRepository(firestore, storage)
+        storage: FirebaseStorage,
+        @ApplicationContext context: Context
+    ): SongRepository = FirebaseSongRepository(firestore, storage, context)
 
     // Provides the main playlist repository implementation
     @Provides

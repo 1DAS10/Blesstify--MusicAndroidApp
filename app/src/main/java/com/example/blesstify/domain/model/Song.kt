@@ -9,6 +9,7 @@ data class Song(
     val album: String? = null,
     val durationSec: Int = 0,
     val coverUrl: String? = null,
+    val thumbnailUrl: String? = null,
     val audioUrl: String? = null,
     val genre: List<String> = emptyList(),
     val moodTags: List<String> = emptyList(),
@@ -22,3 +23,7 @@ data class Song(
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
 )
+
+fun Song.listArtworkUrl(): String? = thumbnailUrl?.takeIf { it.isNotBlank() } ?: coverUrl
+
+fun Song.detailArtworkUrl(): String? = coverUrl?.takeIf { it.isNotBlank() } ?: thumbnailUrl
