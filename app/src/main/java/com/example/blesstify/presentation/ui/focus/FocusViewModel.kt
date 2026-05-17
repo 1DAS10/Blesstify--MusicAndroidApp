@@ -262,14 +262,24 @@ class FocusViewModel @Inject constructor(
     private fun startTimer() {
         _uiState.update { it.copy(isRunning = true) }
         
-        // Music logic: Resume or start playing
-        if (!musicController.isPlaying.value) {
-            val currentSong = _uiState.value.currentSong
-            if (currentSong != null) {
+        // Music logic: Ensure focus session music is playing
+        val currentSong = _uiState.value.currentSong
+        val focusSongs = _uiState.value.focusSongs
+        
+        if (focusSongs.isNotEmpty()) {
+            // Check if currently playing song is from focus session
+            val currentPlayingSong = musicController.currentSong.value
+            val isPlayingFocusSong = currentPlayingSong != null && 
+                                     focusSongs.any { it.id == currentPlayingSong.id }
+            
+            if (!isPlayingFocusSong) {
+                // Not playing focus music -> switch to focus playlist
+                playSong(currentSong ?: focusSongs.first())
+            } else if (!musicController.isPlaying.value) {
+                // Playing focus song but paused -> resume
                 musicController.resume()
-            } else if (_uiState.value.focusSongs.isNotEmpty()) {
-                playSong(_uiState.value.focusSongs.first())
             }
+            // else: already playing focus music, do nothing
         }
 
         timerJob = viewModelScope.launch {

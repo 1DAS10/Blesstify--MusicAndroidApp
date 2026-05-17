@@ -67,8 +67,17 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(64.dp))
 
         // Header / Logo
-        Text("C", fontSize = 48.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Text("Blessify", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = R.mipmap.ic_launcher_foreground),
+            contentDescription = "Blesstify logo",
+            modifier = Modifier.size(84.dp)
+        )
+        Text(
+            "Blesstify",
+            style = MaterialTheme.typography.headlineMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
 
         Spacer(modifier = Modifier.height(48.dp))
 

@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.example.blesstify.presentation.ui.navigation.BlessifyNavGraph
 import com.example.blesstify.presentation.ui.theme.BlessifyTheme
+import com.example.blesstify.presentation.ui.theme.ImageLoaderProvider
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -14,8 +15,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            BlessifyTheme {
-                BlessifyNavGraph()
+            ImageLoaderProvider {
+                BlessifyTheme {
+                    BlessifyNavGraph()
+                }
             }
         }
     }

@@ -1,5 +1,18 @@
 package com.example.blesstify.presentation.ui.main
 
+import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,15 +47,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
+import java.util.Locale
 
 @Composable
 fun SearchScreen(
@@ -53,6 +69,169 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    
+    var isListening by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Create SpeechRecognizer instance
+    val speechRecognizer = androidx.compose.runtime.remember {
+        SpeechRecognizer.createSpeechRecognizer(context)
+    }
+
+    // Recognition listener
+    val recognitionListener = androidx.compose.runtime.remember {
+        object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                Log.d("MicSearch", "onReadyForSpeech")
+                isListening = true
+            }
+
+            override fun onBeginningOfSpeech() {
+                Log.d("MicSearch", "onBeginningOfSpeech")
+            }
+
+            override fun onRmsChanged(rmsdB: Float) {
+                // Audio level changed
+            }
+
+            override fun onBufferReceived(buffer: ByteArray?) {
+                // Partial audio buffer
+            }
+
+            override fun onEndOfSpeech() {
+                Log.d("MicSearch", "onEndOfSpeech")
+                isListening = false
+            }
+
+            override fun onError(error: Int) {
+                Log.e("MicSearch", "onError: error code=$error")
+                isListening = false
+                
+                val errorMessage = when (error) {
+                    SpeechRecognizer.ERROR_AUDIO -> "Lỗi ghi âm"
+                    SpeechRecognizer.ERROR_CLIENT -> "Lỗi client"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Chưa cấp quyền microphone"
+                    SpeechRecognizer.ERROR_NETWORK -> "Lỗi mạng"
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Hết thời gian kết nối"
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Không nhận diện được giọng nói"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Đang bận, thử lại"
+                    SpeechRecognizer.ERROR_SERVER -> "Lỗi server"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Không nghe thấy giọng nói"
+                    else -> "Lỗi không xác định ($error)"
+                }
+                
+                Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            }
+
+            override fun onResults(results: Bundle?) {
+                Log.d("MicSearch", "onResults")
+                isListening = false
+                
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                Log.d("MicSearch", "speech matches count=${matches?.size ?: 0}")
+                
+                val spokenText = matches?.firstOrNull()?.trim().orEmpty()
+                if (spokenText.isNotBlank()) {
+                    Log.d("MicSearch", "spokenText=$spokenText")
+                    viewModel.onQueryChange(spokenText)
+                    viewModel.onSearchSubmit()
+                    keyboardController?.hide()
+                } else {
+                    Log.w("MicSearch", "spoken text blank")
+                }
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {
+                // Partial recognition results
+            }
+
+            override fun onEvent(eventType: Int, params: Bundle?) {
+                // Reserved for future events
+            }
+        }
+    }
+
+    // Set listener
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        speechRecognizer.setRecognitionListener(recognitionListener)
+        
+        onDispose {
+            Log.d("MicSearch", "Disposing SpeechRecognizer")
+            try {
+                speechRecognizer.stopListening()
+                speechRecognizer.cancel()
+                speechRecognizer.destroy()
+            } catch (e: Exception) {
+                Log.e("MicSearch", "Error disposing SpeechRecognizer", e)
+            }
+        }
+    }
+
+    fun startSpeechRecognition() {
+        try {
+            // Check if speech recognition is available
+            if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+                Log.e("MicSearch", "Speech recognition not available on device")
+                Toast.makeText(
+                    context,
+                    "Vui lòng dùng nút mic trên bàn phím để tìm kiếm bằng giọng nói",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            }
+
+            Log.d("MicSearch", "Starting speech recognition")
+            
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+
+            speechRecognizer.startListening(intent)
+            isListening = true
+            
+        } catch (e: Exception) {
+            Log.e("MicSearch", "Error starting speech recognition", e)
+            isListening = false
+            Toast.makeText(
+                context,
+                "Không thể bắt đầu nhận diện giọng nói",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d("MicSearch", "mic permission granted=$granted")
+        if (granted) {
+            startSpeechRecognition()
+        } else {
+            Log.w("MicSearch", "mic permission denied")
+            Toast.makeText(
+                context,
+                "Cần quyền microphone để tìm kiếm bằng giọng nói",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    fun launchVoiceSearch() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        Log.d("MicSearch", "launchVoiceSearch hasPermission=$hasPermission")
+        if (hasPermission) {
+            startSpeechRecognition()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -76,7 +255,13 @@ fun SearchScreen(
                         Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
                     }
                 } else {
-                    Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = Color.Gray)
+                    IconButton(onClick = { launchVoiceSearch() }) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Voice search",
+                            tint = Color.Gray
+                        )
+                    }
                 }
             },
             colors = OutlinedTextFieldDefaults.colors(
@@ -96,6 +281,17 @@ fun SearchScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Recent searches show between search bar and Categories (default browse mode)
+        if (uiState.query.isBlank() && uiState.recentSearches.isNotEmpty()) {
+            RecentSearchesSection(
+                searches = uiState.recentSearches,
+                onClearAll = { viewModel.onClearAllHistory() },
+                onSearchClick = { viewModel.onRecentSearchClick(it) },
+                onRemoveSearch = { viewModel.onDeleteRecentSearch(it) }
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+        }
 
         if (uiState.query.isNotBlank()) {
             // ─── Search Results Mode ───
@@ -162,6 +358,8 @@ fun SearchScreen(
                         SongResultItem(
                             song = song,
                             onClick = {
+                                // treat as explicit search action -> save history
+                                viewModel.onSearchSubmit()
                                 onNavigateToPlayerFromSearch(uiState.results, index)
                             }
                         )
@@ -177,72 +375,6 @@ fun SearchScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                item(span = { GridItemSpan(2) }) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                // Recent Searches Section (Full Span)
-                if (uiState.recentSearches.isNotEmpty()) {
-                    item(span = { GridItemSpan(2) }) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Recent Searches",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                            IconButton(onClick = { viewModel.onClearAllHistory() }) {
-                                Icon(
-                                    Icons.Default.DeleteSweep,
-                                    contentDescription = "Clear all",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(uiState.recentSearches) { search ->
-                                InputChip(
-                                    selected = false,
-                                    onClick = { viewModel.onRecentSearchClick(search.query) },
-                                    label = { Text(search.query) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.History,
-                                            null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { viewModel.onDeleteRecentSearch(search.id) },
-                                            modifier = Modifier.size(18.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = "Remove",
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    },
-                                    colors = InputChipDefaults.inputChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        labelColor = Color.White
-                                    ),
-                                    border = null,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Browse All Section Header
                 item(span = { GridItemSpan(2) }) {
                     Text(
                         "Categories",
@@ -391,6 +523,91 @@ fun CategorySongItem(song: Song, onClick: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(song.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(song.artist, color = Color.Gray, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun RecentSearchesSection(
+    searches: List<com.example.blesstify.domain.model.SearchHistory>,
+    onClearAll: () -> Unit,
+    onSearchClick: (String) -> Unit,
+    onRemoveSearch: (String) -> Unit
+) {
+    Surface(
+        color = Color.White.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.07f))
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.History,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Recent",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(onClick = onClearAll, contentPadding = PaddingValues(0.dp)) {
+                    Icon(
+                        Icons.Default.DeleteSweep,
+                        contentDescription = "Clear all",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Clear", color = Color.Gray)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(searches) { search ->
+                    InputChip(
+                        selected = false,
+                        onClick = { onSearchClick(search.query) },
+                        label = {
+                            Text(
+                                search.query,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { onRemoveSearch(search.id) },
+                                modifier = Modifier.size(18.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        },
+                        colors = InputChipDefaults.inputChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = Color.White
+                        ),
+                        border = null,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+            }
+        }
     }
 }
 

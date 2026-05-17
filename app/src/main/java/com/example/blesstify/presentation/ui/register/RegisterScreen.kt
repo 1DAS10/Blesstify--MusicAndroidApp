@@ -73,11 +73,16 @@ fun RegisterScreen(
 
             // Header / Logo
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                contentDescription = "Logo",
-                modifier = Modifier.size(72.dp)
+                painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                contentDescription = "Blesstify logo",
+                modifier = Modifier.size(84.dp)
             )
-            Text("Blessify", style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(
+                "Blesstify",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
