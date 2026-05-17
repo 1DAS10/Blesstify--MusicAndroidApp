@@ -27,6 +27,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.compose.runtime.SideEffect
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +41,17 @@ fun UploadMusicScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+
+    // Configure status bar
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? android.app.Activity)?.window
+        window?.let {
+            WindowCompat.setDecorFitsSystemWindows(it, false)
+            it.statusBarColor = android.graphics.Color.TRANSPARENT
+            WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = false
+        }
+    }
 
     // Audio file picker
     val audioPickerLauncher = rememberLauncherForActivityResult(
@@ -96,9 +111,9 @@ fun UploadMusicScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
+                .padding(innerPadding)
                 .padding(horizontal = 24.dp)
         ) {
             item {

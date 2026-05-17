@@ -1,7 +1,18 @@
 package com.example.blesstify.presentation.ui.player
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,22 +22,32 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.presentation.player.PlayerViewModel
+import com.example.blesstify.presentation.ui.theme.pressScale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
@@ -46,6 +67,62 @@ fun PlayerScreen(
     var isDragging by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
 
+    val verticalOffset = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenHeightPx = remember(configuration, density) {
+        with(density) { configuration.screenHeightDp.dp.toPx() }
+    }
+    val dismissThresholdPx = remember(screenHeightPx) { screenHeightPx * 0.22f }
+
+    suspend fun animateDismissThenBack() {
+        verticalOffset.animateTo(
+            targetValue = screenHeightPx,
+            animationSpec = tween(
+                durationMillis = 260,
+                easing = androidx.compose.animation.core.LinearOutSlowInEasing
+            )
+        )
+        onBack()
+    }
+
+    // Enter animation: slide panel up from bottom on first appear
+    LaunchedEffect(Unit) {
+        verticalOffset.snapTo(screenHeightPx)
+        verticalOffset.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(
+                durationMillis = 400,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing
+            )
+        )
+    }
+
+    // Handle back button
+    BackHandler {
+        coroutineScope.launch {
+            animateDismissThenBack()
+        }
+    }
+
+    // Album art rotation animation - continuous when playing
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isPlaying) 360f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(60000, easing = LinearEasing), // 60 seconds per full rotation
+            repeatMode = RepeatMode.Restart
+        )
+    )
+
+    // Slider thumb scale on drag: 1.0f -> 1.4f (spring)
+    val sliderInteractionSource = remember { MutableInteractionSource() }
+    val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
+    val sliderThumbScale by animateFloatAsState(
+        targetValue = if (isSliderDragged) 1.4f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f)
+    )
+
     val sleepTimerBadgeText = sleepTimerRemainingMs?.let { remainingMs ->
         val minutesLeft = ((remainingMs + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
         "${minutesLeft}m"
@@ -60,10 +137,10 @@ fun PlayerScreen(
 
     val displayPositionMs = if (isDragging) sliderPosition.toLong() else currentPosition
 
-    // Gradient background tạo chiều sâu
+    // Gradient background - FULLY OPAQUE for clean modal appearance
     val backgroundGradient = Brush.verticalGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            MaterialTheme.colorScheme.surfaceVariant,
             MaterialTheme.colorScheme.background
         )
     )
@@ -75,12 +152,72 @@ fun PlayerScreen(
         return String.format("%d:%02d", minutes, seconds)
     }
 
+    // Scrim alpha based on drag progress (0 = fully dragged down, 0.5 = at top)
+    val scrimAlpha = (1f - (verticalOffset.value / screenHeightPx)).coerceIn(0f, 1f) * 0.5f
+
+    // Root container: transparent, shows previous screen
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient)
-            .statusBarsPadding()
+        modifier = Modifier.fillMaxSize()
     ) {
+        // Scrim backdrop
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = scrimAlpha))
+        )
+
+        // Player panel (draggable modal)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset {
+                    IntOffset(
+                        x = 0,
+                        y = verticalOffset.value.roundToInt().coerceAtLeast(0)
+                    )
+                }
+                .background(backgroundGradient)
+                .statusBarsPadding()
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { _, dragAmount ->
+                            if (dragAmount > 0f || verticalOffset.value > 0f) {
+                                val nextOffset = (verticalOffset.value + dragAmount)
+                                    .coerceIn(0f, screenHeightPx)
+                                coroutineScope.launch {
+                                    verticalOffset.snapTo(nextOffset)
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            coroutineScope.launch {
+                                if (verticalOffset.value > dismissThresholdPx) {
+                                    animateDismissThenBack()
+                                } else {
+                                    verticalOffset.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.85f,
+                                            stiffness = 500f
+                                        )
+                                    )
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                verticalOffset.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = 500f
+                                    )
+                                )
+                            }
+                        }
+                    )
+                }
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -95,7 +232,11 @@ fun PlayerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onBack,
+                    onClick = {
+                        coroutineScope.launch {
+                            animateDismissThenBack()
+                        }
+                    },
                     modifier = Modifier.background(Color.White.copy(0.08f), CircleShape)
                 ) {
                     Icon(Icons.Rounded.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(32.dp))
@@ -132,7 +273,9 @@ fun PlayerScreen(
                 AsyncImage(
                     model = currentSong?.coverUrl,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(rotationAngle),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -166,12 +309,17 @@ fun PlayerScreen(
                     onClick = { viewModel.toggleLike() },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = null,
-                        tint = if (isLiked) Color(0xFFFF4B4B) else Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(32.dp)
-                    )
+                    Crossfade(
+                        targetState = isLiked,
+                        animationSpec = tween(durationMillis = 200)
+                    ) { liked ->
+                        Icon(
+                            imageVector = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            tint = if (liked) Color(0xFFFF4B4B) else Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
 
@@ -190,6 +338,19 @@ fun PlayerScreen(
                         viewModel.seekTo(sliderPosition.toLong())
                     },
                     valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
+                    interactionSource = sliderInteractionSource,
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            interactionSource = sliderInteractionSource,
+                            colors = SliderDefaults.colors(thumbColor = Color.White),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .graphicsLayer {
+                                    scaleX = sliderThumbScale
+                                    scaleY = sliderThumbScale
+                                }
+                        )
+                    },
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -241,7 +402,10 @@ fun PlayerScreen(
                     onClick = { viewModel.playPause() },
                     shape = CircleShape,
                     color = Color.White,
-                    modifier = Modifier.size(80.dp).shadow(10.dp, CircleShape)
+                    modifier = Modifier
+                        .size(80.dp)
+                        .shadow(10.dp, CircleShape)
+                        .pressScale()
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -293,6 +457,7 @@ fun PlayerScreen(
             }
 
             Spacer(modifier = Modifier.height(48.dp))
+        }
         }
     }
 
