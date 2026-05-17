@@ -65,7 +65,7 @@ class FirebaseHistoryRepository(
                 device = doc.getString("device") ?: "android",
                 playedAt = playedAt
             )
-        }
+        }.distinctBy { it.songId } // Keep only the most recent entry for each song
     }
 
     override fun observeHistory(userId: String, limit: Int): kotlinx.coroutines.flow.Flow<List<ListeningHistory>> = kotlinx.coroutines.flow.callbackFlow {
@@ -92,7 +92,7 @@ class FirebaseHistoryRepository(
                             device = doc.getString("device") ?: "android",
                             playedAt = playedAt
                         )
-                    }
+                    }.distinctBy { it.songId } // Keep only the most recent entry for each song
                     trySend(items)
                 }
             }
