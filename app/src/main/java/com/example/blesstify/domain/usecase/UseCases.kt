@@ -166,8 +166,10 @@ class GetLikedSongIdsUseCase(private val likesRepository: LikesRepository) {
 }
 
 class LogListeningHistoryUseCase(private val historyRepository: HistoryRepository) {
-    suspend operator fun invoke(userId: String, item: ListeningHistory) =
+    suspend operator fun invoke(userId: String, item: ListeningHistory) {
         historyRepository.logHistory(userId, item)
+        historyRepository.evaluateDailyListeningMilestones(userId)
+    }
 }
 
 class GetListeningHistoryUseCase(private val historyRepository: HistoryRepository) {

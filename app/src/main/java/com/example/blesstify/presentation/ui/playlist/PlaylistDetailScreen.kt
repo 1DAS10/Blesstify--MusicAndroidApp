@@ -334,6 +334,7 @@ fun PlaylistDetailScreen(
                             val song = uiState.songs.find { it.id == track.songId }
                             PlaylistTrackRow(
                                 index = index + 1,
+                                song = song,
                                 title = song?.title ?: track.songId,
                                 artist = song?.artist ?: "Unknown Artist",
                                 coverUrl = song?.coverUrl,
@@ -343,6 +344,8 @@ fun PlaylistDetailScreen(
                                     viewModel.playPlaylist(index)
                                     onPlay()
                                 },
+                                onAddToQueue = { s -> viewModel.addSongToQueue(s) },
+                                onPlayNext = { s -> viewModel.playSongNext(s) },
                                 onRemove = { viewModel.removeTrack(track.songId) }
                             )
                         }
@@ -605,16 +608,21 @@ fun AddSongItem(song: Song, onAdd: () -> Unit, isLoading: Boolean = false) {
 @Composable
 fun PlaylistTrackRow(
     index: Int,
+    song: Song?,
     title: String,
     artist: String,
     coverUrl: String?,
     canEdit: Boolean,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onAddToQueue: (Song) -> Unit,
+    onPlayNext: (Song) -> Unit,
     onRemove: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
-        color = if (isPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent, 
+        color = if (isPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -624,9 +632,9 @@ fun PlaylistTrackRow(
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isPlaying) {
                 Icon(
-                    Icons.Default.MusicNote, 
-                    null, 
-                    tint = MaterialTheme.colorScheme.primary, 
+                    Icons.Default.MusicNote,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.width(32.dp).size(16.dp)
                 )
             } else {
@@ -653,22 +661,62 @@ fun PlaylistTrackRow(
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    title, 
-                    color = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White, 
-                    fontWeight = FontWeight.SemiBold, 
-                    maxLines = 1, 
+                    title,
+                    color = if (isPlaying) MaterialTheme.colorScheme.primary else Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(artist, color = Color.Gray, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (canEdit) {
+
+            Box {
                 IconButton(
-                    onClick = onRemove, 
+                    onClick = { showMenu = true },
                     modifier = Modifier
                         .size(32.dp)
-                        .background(Color(0xFFFF6B6B).copy(0.1f), CircleShape)
+                        .background(Color.White.copy(0.06f), CircleShape)
                 ) {
-                    Icon(Icons.Default.Close, null, tint = Color(0xFFFF6B6B), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.MoreVert, null, tint = Color.White.copy(0.85f), modifier = Modifier.size(18.dp))
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(Color(0xFF1A1D23))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Add to queue", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.QueueMusic, null, tint = Color.Gray) },
+                        enabled = song != null,
+                        onClick = {
+                            val s = song ?: return@DropdownMenuItem
+                            showMenu = false
+                            onAddToQueue(s)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Play next", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.SkipNext, null, tint = Color.Gray) },
+                        enabled = song != null,
+                        onClick = {
+                            val s = song ?: return@DropdownMenuItem
+                            showMenu = false
+                            onPlayNext(s)
+                        }
+                    )
+
+                    if (canEdit) {
+                        HorizontalDivider(color = Color.White.copy(0.1f))
+                        DropdownMenuItem(
+                            text = { Text("Remove from playlist", color = Color(0xFFFF6B6B)) },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color(0xFFFF6B6B)) },
+                            onClick = {
+                                showMenu = false
+                                onRemove()
+                            }
+                        )
+                    }
                 }
             }
         }

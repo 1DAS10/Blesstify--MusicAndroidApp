@@ -4,8 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.blesstify.core.utils.Resource
+import com.example.blesstify.data.remote.BlesstifyRemoteDataSource
+import com.example.blesstify.data.remote.NetworkResult
 import com.example.blesstify.domain.model.Song
 import com.example.blesstify.domain.usecase.*
+import com.google.firebase.Timestamp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,7 +31,8 @@ class ExploreViewModel @Inject constructor(
     private val getUserPlaylistsUseCase: GetUserPlaylistsUseCase,
     private val getLikedPlaylistsUseCase: GetLikedPlaylistsUseCase,
     private val getTrendingSongsUseCase: GetTrendingSongsUseCase,
-    private val getCurrentUserUseCase: GetCurrentUserUseCase
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val remoteDataSource: BlesstifyRemoteDataSource
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExploreUiState())
@@ -70,30 +74,73 @@ class ExploreViewModel @Inject constructor(
                     }
                 }
 
-                // Load Trending Songs
+                // Load Trending Songs (Retrofit first, Firebase fallback)
                 launch {
                     val TAG = "RecommendForToday"
                     try {
-                        Log.d(TAG, "ViewModel: Requesting trending songs...")
-                        getTrendingSongsUseCase(limit = 10, monthsBack = 2).collect { resource ->
-                            when (resource) {
-                                is Resource.Success -> {
-                                    val trendingSongs = resource.data ?: emptyList()
-                                    Log.d(TAG, "ViewModel: Received ${trendingSongs.size} songs from repository.")
-                                    _uiState.update { 
-                                        it.copy(
-                                            recommendedSongs = trendingSongs,
-                                            featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
-                                        ) 
-                                    }
+                        when (val apiResult = remoteDataSource.getTrendingSongs(limit = 10)) {
+                            is NetworkResult.Success -> {
+                                val trendingSongs = apiResult.data.data.map { dto ->
+                                    Song(
+                                        id = dto.id,
+                                        title = dto.title,
+                                        artist = dto.artist,
+                                        coverUrl = dto.coverUrl,
+                                        thumbnailUrl = dto.thumbnailUrl,
+                                        createdAt = Timestamp.now(),
+                                        updatedAt = Timestamp.now(),
+                                        isPublic = true,
+                                        status = "published"
+                                    )
                                 }
-                                is Resource.Error -> {
-                                    Log.e(TAG, "ViewModel: Error from repository: ${resource.error}")
-                                }
-                                is Resource.Loading -> {
-                                    Log.d(TAG, "ViewModel: Trending data is loading...")
+                                Log.d(TAG, "ViewModel: Retrofit success with ${trendingSongs.size} songs.")
+                                _uiState.update {
+                                    it.copy(
+                                        recommendedSongs = trendingSongs,
+                                        featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
+                                    )
                                 }
                             }
+
+                            is NetworkResult.HttpError -> {
+                                Log.e(TAG, "ViewModel: Retrofit HTTP ${apiResult.code} (${apiResult.message}), fallback Firebase...")
+                                getTrendingSongsUseCase(limit = 10, monthsBack = 2).collect { resource ->
+                                    when (resource) {
+                                        is Resource.Success -> {
+                                            val trendingSongs = resource.data ?: emptyList()
+                                            _uiState.update {
+                                                it.copy(
+                                                    recommendedSongs = trendingSongs,
+                                                    featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
+                                                )
+                                            }
+                                        }
+                                        is Resource.Error -> Log.e(TAG, "ViewModel: Firebase fallback error: ${resource.error}")
+                                        is Resource.Loading -> Unit
+                                    }
+                                }
+                            }
+
+                            is NetworkResult.Error -> {
+                                Log.e(TAG, "ViewModel: Retrofit failed (${apiResult.message}), fallback Firebase...")
+                                getTrendingSongsUseCase(limit = 10, monthsBack = 2).collect { resource ->
+                                    when (resource) {
+                                        is Resource.Success -> {
+                                            val trendingSongs = resource.data ?: emptyList()
+                                            _uiState.update {
+                                                it.copy(
+                                                    recommendedSongs = trendingSongs,
+                                                    featuredSong = trendingSongs.firstOrNull() ?: it.featuredSong
+                                                )
+                                            }
+                                        }
+                                        is Resource.Error -> Log.e(TAG, "ViewModel: Firebase fallback error: ${resource.error}")
+                                        is Resource.Loading -> Unit
+                                    }
+                                }
+                            }
+
+                            NetworkResult.Loading -> Unit
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "ViewModel: Trending launch exception: ${e.message}", e)

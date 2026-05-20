@@ -14,6 +14,7 @@ import com.example.blesstify.domain.usecase.DeleteSearchHistoryUseCase
 import com.example.blesstify.domain.usecase.ClearSearchHistoryUseCase
 import com.example.blesstify.domain.usecase.GetSongsByGenreUseCase
 import com.example.blesstify.domain.usecase.GetPublicSongsUseCase
+import com.example.blesstify.presentation.player.MusicController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +51,8 @@ class SearchViewModel @Inject constructor(
     private val deleteSearchHistoryUseCase: DeleteSearchHistoryUseCase,
     private val clearSearchHistoryUseCase: ClearSearchHistoryUseCase,
     private val getSongsByGenreUseCase: GetSongsByGenreUseCase,
-    private val getPublicSongsUseCase: GetPublicSongsUseCase
+    private val getPublicSongsUseCase: GetPublicSongsUseCase,
+    private val musicController: MusicController
 ) : ViewModel() {
 
     private val browseCategoryNames = listOf(
@@ -167,6 +169,14 @@ class SearchViewModel @Inject constructor(
                 _uiState.update { it.copy(recentSearches = emptyList()) }
             } catch (_: Exception) { /* best effort */ }
         }
+    }
+
+    fun addSongToQueue(song: Song) {
+        musicController.addToQueue(song)
+    }
+
+    fun playSongNext(song: Song) {
+        musicController.addToQueueNext(song)
     }
 
     private fun loadBrowseCategories() {

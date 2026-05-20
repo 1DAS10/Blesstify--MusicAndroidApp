@@ -10,6 +10,7 @@ import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.domain.repository.SongRepository
 import com.example.blesstify.util.ImageLoaderFactory
 import com.example.blesstify.util.SongImageUtils
+import com.example.blesstify.util.SlugUtils
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -18,6 +19,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -39,10 +41,15 @@ class FirebaseSongRepository(
                 id = id,
                 title = getString("title") ?: "",
                 artist = getString("artist") ?: "",
+                artistId = getString("artistId"),
+                artistIds = (get("artistIds") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 album = getString("album"),
+                albumId = getString("albumId"),
                 durationSec = getLong("durationSec")?.toInt() ?: 0,
                 coverUrl = getString("coverUrl"),
                 thumbnailUrl = getString("thumbnailUrl"),
+                albumCoverUrl = getString("albumCoverUrl"),
+                artistCoverUrl = getString("artistCoverUrl"),
                 audioUrl = getString("audioUrl"),
                 genre = (get("genre") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 moodTags = (get("moodTags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
@@ -66,6 +73,56 @@ class FirebaseSongRepository(
             context = context,
             urls = songs.map { it.listArtworkUrl() }
         )
+    }
+
+    private suspend fun upsertArtist(
+        artistId: String,
+        artistName: String,
+        coverUrl: String?
+    ) {
+        if (artistId.isBlank() || artistName.isBlank()) return
+
+        val docRef = firestore.collection("artists").document(artistId)
+        val existing = docRef.get().await()
+
+        val data = hashMapOf<String, Any?>(
+            "name" to artistName,
+            "coverUrl" to coverUrl,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        if (!existing.exists()) {
+            data["createdAt"] = FieldValue.serverTimestamp()
+        }
+
+        docRef.set(data, SetOptions.merge()).await()
+    }
+
+    private suspend fun upsertAlbum(
+        albumId: String,
+        albumName: String,
+        artistId: String?,
+        artistName: String?,
+        coverUrl: String?
+    ) {
+        if (albumId.isBlank() || albumName.isBlank()) return
+
+        val docRef = firestore.collection("albums").document(albumId)
+        val existing = docRef.get().await()
+
+        val data = hashMapOf<String, Any?>(
+            "name" to albumName,
+            "coverUrl" to coverUrl,
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        if (!artistId.isNullOrBlank()) data["artistIds"] = listOf(artistId)
+        if (!artistName.isNullOrBlank()) data["artistNames"] = listOf(artistName)
+
+        if (!existing.exists()) {
+            data["createdAt"] = FieldValue.serverTimestamp()
+        }
+
+        docRef.set(data, SetOptions.merge()).await()
     }
 
     override fun getSong(songId: String): Flow<Resource<Song>> = flow {
@@ -111,13 +168,19 @@ class FirebaseSongRepository(
     override fun addSong(song: Song): Flow<Resource<String>> = flow {
         emit(Resource.Loading())
         try {
+            val artistIds = if (song.artistIds.isNotEmpty()) song.artistIds else song.artistId?.let { listOf(it) } ?: emptyList()
             val songMap = hashMapOf<String, Any?>(
                 "title" to song.title,
                 "artist" to song.artist,
+                "artistId" to song.artistId,
+                "artistIds" to artistIds,
                 "album" to song.album,
+                "albumId" to song.albumId,
                 "durationSec" to song.durationSec,
                 "coverUrl" to song.coverUrl,
                 "thumbnailUrl" to song.thumbnailUrl,
+                "albumCoverUrl" to song.albumCoverUrl,
+                "artistCoverUrl" to song.artistCoverUrl,
                 "audioUrl" to song.audioUrl,
                 "genre" to song.genre,
                 "moodTags" to song.moodTags,
@@ -188,14 +251,48 @@ class FirebaseSongRepository(
                 }
             }
 
+            // Step 4: Upsert normalized artist/album collections
+            val finalArtistId = song.artistId?.takeIf { it.isNotBlank() }
+                ?: SlugUtils.slugify(song.artist)
+
+            val finalAlbumId = song.albumId?.takeIf { !it.isNullOrBlank() }
+                ?: song.album?.takeIf { it.isNotBlank() }?.let { SlugUtils.slugify("${song.artist}-${it}") }
+
+            runCatching {
+                upsertArtist(
+                    artistId = finalArtistId,
+                    artistName = song.artist,
+                    coverUrl = song.artistCoverUrl ?: coverDownloadUrl
+                )
+
+                if (!finalAlbumId.isNullOrBlank() && !song.album.isNullOrBlank()) {
+                    upsertAlbum(
+                        albumId = finalAlbumId,
+                        albumName = song.album,
+                        artistId = finalArtistId,
+                        artistName = song.artist,
+                        coverUrl = song.albumCoverUrl ?: coverDownloadUrl
+                    )
+                }
+            }.onFailure { e ->
+                Log.w("FirebaseSongRepo", "Upsert album/artist failed (non-fatal): ${e.message}")
+            }
+
+            val artistIds = if (song.artistIds.isNotEmpty()) song.artistIds else listOf(finalArtistId)
+
             // Step 5: Create song document
             val songMap = hashMapOf<String, Any?>(
                 "title" to song.title,
                 "artist" to song.artist,
+                "artistId" to finalArtistId,
+                "artistIds" to artistIds,
                 "album" to song.album,
+                "albumId" to finalAlbumId,
                 "audioUrl" to audioDownloadUrl,
                 "coverUrl" to coverDownloadUrl,
                 "thumbnailUrl" to thumbnailDownloadUrl,
+                "albumCoverUrl" to (song.albumCoverUrl ?: coverDownloadUrl),
+                "artistCoverUrl" to (song.artistCoverUrl ?: coverDownloadUrl),
                 "durationSec" to song.durationSec,
                 "genre" to song.genre,
                 "moodTags" to song.moodTags,

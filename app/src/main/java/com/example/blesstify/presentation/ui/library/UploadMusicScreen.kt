@@ -196,19 +196,30 @@ fun UploadMusicScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // ─── Metadata Form ───
                 MetadataForm(
                     title = uiState.title,
+
                     artist = uiState.artist,
+                    artistId = uiState.artistId,
+                    artistOptions = uiState.artistOptions,
+
                     album = uiState.album,
+                    albumId = uiState.albumId,
+                    albumOptions = uiState.albumOptions,
+
                     genres = uiState.genres,
                     coverUri = uiState.coverUri,
                     isPublic = uiState.isPublic,
                     isLoading = uiState.isLoading,
                     hasAudio = uiState.audioUri != null,
                     onTitleChange = { viewModel.onEvent(UploadUiEvent.TitleChanged(it)) },
+
                     onArtistChange = { viewModel.onEvent(UploadUiEvent.ArtistChanged(it)) },
+                    onArtistSelected = { viewModel.onEvent(UploadUiEvent.ArtistSelected(it)) },
+
                     onAlbumChange = { viewModel.onEvent(UploadUiEvent.AlbumChanged(it)) },
+                    onAlbumSelected = { viewModel.onEvent(UploadUiEvent.AlbumSelected(it)) },
+
                     onGenreToggle = { viewModel.onEvent(UploadUiEvent.GenreToggled(it)) },
                     onPublicChange = { viewModel.onEvent(UploadUiEvent.PublicChanged(it)) },
                     onCoverClick = {
@@ -339,16 +350,28 @@ private fun AudioDropArea(
 @Composable
 private fun MetadataForm(
     title: String,
+
     artist: String,
+    artistId: String?,
+    artistOptions: List<com.example.blesstify.domain.model.Artist>,
+
     album: String,
+    albumId: String?,
+    albumOptions: List<com.example.blesstify.domain.model.Album>,
+
     genres: List<String>,
     coverUri: android.net.Uri?,
     isPublic: Boolean,
     isLoading: Boolean,
     hasAudio: Boolean,
     onTitleChange: (String) -> Unit,
+
     onArtistChange: (String) -> Unit,
+    onArtistSelected: (String?) -> Unit,
+
     onAlbumChange: (String) -> Unit,
+    onAlbumSelected: (String?) -> Unit,
+
     onGenreToggle: (String) -> Unit,
     onPublicChange: (Boolean) -> Unit,
     onCoverClick: () -> Unit,
@@ -432,11 +455,56 @@ private fun MetadataForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ─── Artist selector ───
             Text("Artist *", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            var artistExpanded by remember { mutableStateOf(false) }
+            val selectedArtistName = remember(artistId, artistOptions) {
+                artistId?.let { id -> artistOptions.firstOrNull { it.id == id }?.name }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = artistExpanded,
+                onExpandedChange = { if (!isLoading) artistExpanded = !artistExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedArtistName ?: "",
+                    onValueChange = { },
+                    readOnly = true,
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = artistExpanded) },
+                    placeholder = { Text("Select existing artist (optional)", color = Color.Gray.copy(0.5f)) },
+                    enabled = !isLoading
+                )
+                ExposedDropdownMenu(
+                    expanded = artistExpanded,
+                    onDismissRequest = { artistExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("(New artist)") },
+                        onClick = {
+                            artistExpanded = false
+                            onArtistSelected(null)
+                        }
+                    )
+                    artistOptions.forEach { opt ->
+                        DropdownMenuItem(
+                            text = { Text(opt.name) },
+                            onClick = {
+                                artistExpanded = false
+                                onArtistSelected(opt.id)
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = artist,
                 onValueChange = onArtistChange,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 shape = RoundedCornerShape(12.dp),
                 placeholder = { Text("Enter artist name", color = Color.Gray.copy(0.5f)) },
                 enabled = !isLoading
@@ -444,11 +512,56 @@ private fun MetadataForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ─── Album selector ───
             Text("Album", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            var albumExpanded by remember { mutableStateOf(false) }
+            val selectedAlbumName = remember(albumId, albumOptions) {
+                albumId?.let { id -> albumOptions.firstOrNull { it.id == id }?.name }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = albumExpanded,
+                onExpandedChange = { if (!isLoading) albumExpanded = !albumExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedAlbumName ?: "",
+                    onValueChange = { },
+                    readOnly = true,
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = albumExpanded) },
+                    placeholder = { Text("Select existing album (optional)", color = Color.Gray.copy(0.5f)) },
+                    enabled = !isLoading
+                )
+                ExposedDropdownMenu(
+                    expanded = albumExpanded,
+                    onDismissRequest = { albumExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("(New album)") },
+                        onClick = {
+                            albumExpanded = false
+                            onAlbumSelected(null)
+                        }
+                    )
+                    albumOptions.forEach { opt ->
+                        DropdownMenuItem(
+                            text = { Text(opt.name) },
+                            onClick = {
+                                albumExpanded = false
+                                onAlbumSelected(opt.id)
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = album,
                 onValueChange = onAlbumChange,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 shape = RoundedCornerShape(12.dp),
                 placeholder = { Text("Album name", color = Color.Gray.copy(0.5f)) },
                 enabled = !isLoading

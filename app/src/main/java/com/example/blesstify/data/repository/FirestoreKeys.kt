@@ -1,8 +1,13 @@
 package com.example.blesstify.data.repository
 
 object FirestoreKeys {
+    const val TAG = "FirestoreDebug"
+    const val LIBRARY_TAG = "FirestoreLibrary"
+
     const val USERS = "users"
     const val SONGS = "songs"
+    const val ALBUMS = "albums"
+    const val ARTISTS = "artists"
     const val PLAYLISTS = "playlists"
     const val RECOMMENDATIONS = "recommendations"
     const val TRACKS = "tracks"

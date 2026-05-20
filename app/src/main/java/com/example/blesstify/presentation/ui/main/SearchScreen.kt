@@ -36,6 +36,9 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -362,7 +365,9 @@ fun SearchScreen(
                                 // treat as explicit search action -> save history
                                 viewModel.onSearchSubmit()
                                 onNavigateToPlayerFromSearch(uiState.results, index)
-                            }
+                            },
+                            onAddToQueue = { viewModel.addSongToQueue(it) },
+                            onPlayNext = { viewModel.playSongNext(it) }
                         )
                     }
                     item { Spacer(modifier = Modifier.height(100.dp)) }
@@ -406,7 +411,14 @@ fun SearchScreen(
 }
 
 @Composable
-fun SongResultItem(song: Song, onClick: () -> Unit) {
+fun SongResultItem(
+    song: Song,
+    onClick: () -> Unit,
+    onAddToQueue: ((Song) -> Unit)? = null,
+    onPlayNext: ((Song) -> Unit)? = null
+) {
+    var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     Surface(
         onClick = onClick,
         color = Color.White.copy(0.05f),
@@ -419,7 +431,6 @@ fun SongResultItem(song: Song, onClick: () -> Unit) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Song icon / thumbnail
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(12.dp)
@@ -464,12 +475,47 @@ fun SongResultItem(song: Song, onClick: () -> Unit) {
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
+            if (onAddToQueue != null && onPlayNext != null) {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "More actions",
+                            tint = Color.White.copy(0.85f)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(Color(0xFF1A1D23))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Add to queue", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.QueueMusic, null, tint = Color.Gray) },
+                            onClick = {
+                                showMenu = false
+                                onAddToQueue(song)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Play next", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.SkipNext, null, tint = Color.Gray) },
+                            onClick = {
+                                showMenu = false
+                                onPlayNext(song)
+                            }
+                        )
+                    }
+                }
+            } else {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Play",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
     }
 }

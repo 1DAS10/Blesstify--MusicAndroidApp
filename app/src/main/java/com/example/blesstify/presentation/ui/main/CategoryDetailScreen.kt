@@ -37,7 +37,8 @@ import javax.inject.Inject
 class CategoryDetailViewModel @Inject constructor(
     private val getSongsByGenreUseCase: GetSongsByGenreUseCase,
     private val getPublicSongsUseCase: GetPublicSongsUseCase,
-    private val getCurrentUserUseCase: GetCurrentUserUseCase
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val musicController: com.example.blesstify.presentation.player.MusicController
 ) : ViewModel() {
     private val _songs = MutableStateFlow<Resource<List<Song>>>(Resource.Loading<List<Song>>())
     val songs: StateFlow<Resource<List<Song>>> = _songs
@@ -78,6 +79,14 @@ class CategoryDetailViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun addSongToQueue(song: Song) {
+        musicController.addToQueue(song)
+    }
+
+    fun playSongNext(song: Song) {
+        musicController.addToQueueNext(song)
     }
 }
 
@@ -138,7 +147,9 @@ fun CategoryDetailScreen(
                                     onClick = {
                                         val index = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
                                         onNavigateToPlayer(songs, index)
-                                    }
+                                    },
+                                    onAddToQueue = { viewModel.addSongToQueue(it) },
+                                    onPlayNext = { viewModel.playSongNext(it) }
                                 )
                             }
                         }

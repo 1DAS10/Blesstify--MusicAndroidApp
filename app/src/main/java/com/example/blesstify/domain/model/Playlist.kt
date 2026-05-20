@@ -9,6 +9,7 @@ data class Playlist(
     val title: String = "",
     val description: String? = null,
     val isPublic: Boolean = false,
+    val isDefault: Boolean = false,
     val coverUrl: String? = null,
     val trackCount: Int = 0,
     val likeCount: Int = 0,

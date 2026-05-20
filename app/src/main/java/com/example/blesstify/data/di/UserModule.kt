@@ -6,10 +6,14 @@ import com.example.blesstify.data.repository.FirebaseSongRepository
 import com.example.blesstify.data.repository.FirebasePlaylistRepository
 import com.example.blesstify.data.repository.FirebaseSearchHistoryRepository
 import com.example.blesstify.data.repository.FirebaseLikesRepository
+import com.example.blesstify.data.repository.FirebaseAlbumRepository
+import com.example.blesstify.data.repository.FirebaseArtistRepository
 import com.example.blesstify.domain.repository.SongRepository
 import com.example.blesstify.domain.repository.PlaylistRepository
 import com.example.blesstify.domain.repository.SearchHistoryRepository
 import com.example.blesstify.domain.repository.LikesRepository
+import com.example.blesstify.domain.repository.AlbumRepository
+import com.example.blesstify.domain.repository.ArtistRepository
 import com.example.blesstify.domain.repository.HistoryRepository
 import com.example.blesstify.domain.repository.RecommendationRepository
 import com.example.blesstify.data.repository.FirebaseHistoryRepository
@@ -106,13 +110,26 @@ object UserModule {
         @ApplicationContext context: Context
     ): SongRepository = FirebaseSongRepository(firestore, storage, context)
 
-    // Provides the main playlist repository implementation
     @Provides
     @Singleton
     fun providePlaylistRepository(
         firestore: FirebaseFirestore,
         storage: FirebaseStorage
     ): PlaylistRepository = FirebasePlaylistRepository(firestore, storage)
+
+    @Provides
+    @Singleton
+    fun provideAlbumRepository(
+        firestore: FirebaseFirestore,
+        storage: FirebaseStorage
+    ): AlbumRepository = FirebaseAlbumRepository(firestore, storage)
+
+    @Provides
+    @Singleton
+    fun provideArtistRepository(
+        firestore: FirebaseFirestore,
+        storage: FirebaseStorage
+    ): ArtistRepository = FirebaseArtistRepository(firestore, storage)
 
     @Provides
     @Singleton

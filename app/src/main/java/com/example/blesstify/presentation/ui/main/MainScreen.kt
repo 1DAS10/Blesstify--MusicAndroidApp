@@ -27,6 +27,7 @@ import com.example.blesstify.domain.model.listArtworkUrl
 import com.example.blesstify.presentation.player.PlayerViewModel
 import com.example.blesstify.presentation.user.UserViewModel
 import com.example.blesstify.presentation.ui.navigation.MainTab
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun MainScreen(
@@ -37,6 +38,10 @@ fun MainScreen(
     onNavigateToEqualizer: () -> Unit,
     onNavigateToUpload: () -> Unit,
     onNavigateToCreatePlaylist: () -> Unit,
+    onNavigateToCreateAlbum: () -> Unit,
+    onNavigateToCreateAlbumWithId: (String) -> Unit,
+    onNavigateToCreateArtist: () -> Unit,
+    onNavigateToCreateArtistWithId: (String) -> Unit,
     onNavigateToAIFocus: () -> Unit,
     onNavigateToNotification: () -> Unit,
     onNavigateToCategory: (String) -> Unit,
@@ -50,8 +55,22 @@ fun MainScreen(
     val userViewModel: UserViewModel = hiltViewModel()
     val userState by userViewModel.uiState.collectAsState()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
-    val currentSong by playerViewModel.currentSong.collectAsState()
-    val isPlaying by playerViewModel.isPlaying.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        notificationViewModel.inAppEvents.collectLatest { event ->
+            when (event) {
+                is com.example.blesstify.presentation.ui.notification.InAppNotificationEvent.Show -> {
+                    snackbarHostState.showSnackbar(
+                        message = "${event.notification.title}: ${event.notification.body}",
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long
+                    )
+                }
+            }
+        }
+    }
 
     var selectedTabRoute by rememberSaveable { mutableStateOf(MainTab.Explore.route) }
     val selectedTab = when (selectedTabRoute) {
@@ -73,23 +92,12 @@ fun MainScreen(
                 onProfileClick = { selectedTabRoute = MainTab.Profile.route }
             )
         },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
-            Column {
-                currentSong?.let { song ->
-                    MiniPlayerBar(
-                        song = song,
-                        isPlaying = isPlaying,
-                        onPlayPause = { playerViewModel.playPause() },
-                        onPrevious = { playerViewModel.previous() },
-                        onNext = { playerViewModel.next() },
-                        onOpenPlayer = onOpenPlayer
-                    )
-                }
-                MainBottomBar(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTabRoute = it.route }
-                )
-            }
+            MainBottomBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTabRoute = it.route }
+            )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
@@ -110,9 +118,13 @@ fun MainScreen(
                 MainTab.Library -> com.example.blesstify.presentation.ui.library.LibraryMainScreen(
                     onOpenPlaylist = { playlistId -> onNavigateToPlaylist(playlistId) },
                     onCreatePlaylist = onNavigateToCreatePlaylist,
+                    onCreateAlbum = onNavigateToCreateAlbum,
+                    onCreateArtist = onNavigateToCreateArtist,
                     onUploadClick = onNavigateToUpload,
                     onOpenAlbum = onNavigateToAlbum,
-                    onOpenArtist = onNavigateToArtist
+                    onOpenArtist = onNavigateToArtist,
+                    onEditAlbum = { albumId -> onNavigateToCreateAlbumWithId(albumId) },
+                    onEditArtist = { artistId -> onNavigateToCreateArtistWithId(artistId) }
                 )
                 MainTab.Profile -> com.example.blesstify.presentation.ui.profile.ProfileScreen(
                     onLogout = onLogout,
@@ -277,11 +289,13 @@ fun MiniPlayerBar(
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onOpenPlayer: () -> Unit
+    onOpenPlayer: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onOpenPlayer,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = modifier
     ) {
         Row(
             modifier = Modifier

@@ -47,11 +47,13 @@ import com.example.blesstify.presentation.player.PlayerViewModel
 import com.example.blesstify.presentation.ui.theme.pressScale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    onNavigateToArtist: (String) -> Unit = {},
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val currentSong by viewModel.currentSong.collectAsState()
@@ -63,10 +65,26 @@ fun PlayerScreen(
     val canNext by viewModel.canNext.collectAsState()
     val canPrevious by viewModel.canPrevious.collectAsState()
     val sleepTimerRemainingMs by viewModel.sleepTimerRemainingMs.collectAsState()
+    val userPlaylists by viewModel.userPlaylists.collectAsState()
+    val uiEvent by viewModel.uiEvents.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+
+    var showMoreSheet by remember { mutableStateOf(false) }
+    var showPlaylistPicker by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiEvent) {
+        when (val ev = uiEvent) {
+            is com.example.blesstify.presentation.player.PlayerUiEvent.Message -> {
+                snackbarHostState.showSnackbar(ev.text)
+            }
+            null -> Unit
+        }
+    }
 
     val verticalOffset = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
@@ -167,6 +185,14 @@ fun PlayerScreen(
                 .background(Color.Black.copy(alpha = scrimAlpha))
         )
 
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+        )
+
         // Player panel (draggable modal)
         Box(
             modifier = Modifier
@@ -253,7 +279,7 @@ fun PlayerScreen(
                 }
 
                 IconButton(
-                    onClick = { /* More actions */ },
+                    onClick = { showMoreSheet = true },
                     modifier = Modifier.background(Color.White.copy(0.08f), CircleShape)
                 ) {
                     Icon(Icons.Default.MoreVert, null, tint = Color.White)
@@ -460,6 +486,141 @@ fun PlayerScreen(
             Spacer(modifier = Modifier.height(48.dp))
         }
         }
+    }
+
+    if (showMoreSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = {
+                showMoreSheet = false
+                showPlaylistPicker = false
+            },
+            sheetState = sheetState,
+            containerColor = Color(0xFF101218),
+            contentColor = Color.White,
+            tonalElevation = 0.dp,
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 10.dp)
+                        .size(width = 56.dp, height = 6.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.18f))
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 22.dp)
+            ) {
+                Text(
+                    text = currentSong?.title ?: "More",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ListItem(
+                    headlineContent = { Text("Go to artist") },
+                    supportingContent = { Text(currentSong?.artist?.takeIf { it.isNotBlank() } ?: "Open artist page", color = Color.White.copy(alpha = 0.65f)) },
+                    leadingContent = {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = 0.08f)) {
+                            Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Person, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .clickable(enabled = currentSong?.artist?.isNotBlank() == true) {
+                            val artistName = currentSong?.artist ?: return@clickable
+                            onNavigateToArtist(artistName)
+                            showMoreSheet = false
+                        },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Share") },
+                    supportingContent = { Text("Send link to Facebook, Zalo, Messenger…", color = Color.White.copy(alpha = 0.65f)) },
+                    leadingContent = {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = 0.08f)) {
+                            Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .clickable(enabled = currentSong != null) { viewModel.shareCurrentSong() },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+
+                ListItem(
+                    headlineContent = { Text("Add to playlist…") },
+                    supportingContent = { Text("Choose playlist", color = Color.White.copy(alpha = 0.65f)) },
+                    leadingContent = {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = 0.08f)) {
+                            Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.LibraryAdd, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .clickable(enabled = currentSong != null) { showPlaylistPicker = true },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+
+    if (showPlaylistPicker) {
+        AlertDialog(
+            onDismissRequest = { showPlaylistPicker = false },
+            title = { Text("Select playlist") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (userPlaylists.isEmpty()) {
+                        Text("No playlists")
+                    } else {
+                        userPlaylists.forEach { pl ->
+                            TextButton(
+                                onClick = {
+                                    viewModel.addCurrentSongToPlaylist(pl.id)
+                                    showPlaylistPicker = false
+                                    showMoreSheet = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(pl.title, fontWeight = FontWeight.SemiBold)
+                                    pl.description?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlaylistPicker = false }) { Text("Close") }
+            }
+        )
     }
 
     if (showSleepTimerDialog) {

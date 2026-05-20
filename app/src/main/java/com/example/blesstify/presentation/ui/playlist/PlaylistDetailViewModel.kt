@@ -369,4 +369,15 @@ class PlaylistDetailViewModel @Inject constructor(
             }
         }
     }
+
+    // --- Queue actions (no auto-play) ---
+    fun addSongToQueue(song: Song) {
+        musicController.addToQueue(song)
+        _uiState.value = _uiState.value.copy(addedMessage = "Added to queue")
+    }
+
+    fun playSongNext(song: Song) {
+        musicController.addToQueueNext(song)
+        _uiState.value = _uiState.value.copy(addedMessage = "Will play next")
+    }
 }

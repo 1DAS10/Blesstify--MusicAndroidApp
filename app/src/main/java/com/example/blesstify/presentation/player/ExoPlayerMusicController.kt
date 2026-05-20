@@ -81,6 +81,10 @@ class ExoPlayerMusicController(
     private var playlist: List<Song> = emptyList()
     private var originalPlaylist: List<Song> = emptyList()
     private var lastPrioritySongIds: List<String> = emptyList()
+
+    private val _queueState = MutableStateFlow(PlaybackQueueState())
+    override val queueState: StateFlow<PlaybackQueueState> = _queueState.asStateFlow()
+
     private var lastRecordedSong: Song? = null
     private var startTimeMs: Long = 0L
     private var totalTimeListenedMs: Long = 0L
@@ -102,10 +106,12 @@ class ExoPlayerMusicController(
 
                 if (mediaItem != null) {
                     val songId = mediaItem.mediaId
-                    val song = playlist.find { it.id == songId }
+                    val index = playlist.indexOfFirst { it.id == songId }
+                    val song = playlist.getOrNull(index)
                     if (song != null) {
                         Log.d(TAG, "onMediaItemTransition: new song='${song.title}' id=${song.id} reason=$reason")
                         _currentSong.value = song
+                        _queueState.value = PlaybackQueueState(items = playlist, currentIndex = index)
                         lastRecordedSong = song
                         startTimeMs = 0L
                         totalTimeListenedMs = 0L
@@ -155,6 +161,8 @@ class ExoPlayerMusicController(
         playlist = listOf(song)
         originalPlaylist = playlist
         lastPrioritySongIds = emptyList()
+        _queueState.value = PlaybackQueueState(items = playlist, currentIndex = 0)
+
         _isShuffleEnabled.value = false
         player.shuffleModeEnabled = false
         _currentSong.value = song
@@ -175,12 +183,15 @@ class ExoPlayerMusicController(
 
     override fun setPlaylist(songs: List<Song>, startIndex: Int, playlistId: String?, source: String) {
         if (songs.isEmpty()) return
+        val safeIndex = startIndex.coerceIn(0, songs.lastIndex)
         this.playlist = songs
         this.originalPlaylist = songs
         this._currentPlaylistId = playlistId
         this._currentSource = source
+        _queueState.value = PlaybackQueueState(items = songs, currentIndex = safeIndex)
+
         // Initialize tracking for the starting song
-        val startSong = songs.getOrNull(startIndex.coerceIn(0, songs.lastIndex))
+        val startSong = songs.getOrNull(safeIndex)
         if (startSong != null) {
             lastRecordedSong = startSong
             startTimeMs = 0L
@@ -189,10 +200,10 @@ class ExoPlayerMusicController(
         }
         player.shuffleModeEnabled = false
         if (_isShuffleEnabled.value) {
-            val startSongId = songs.getOrNull(startIndex)?.id
+            val startSongId = songs.getOrNull(safeIndex)?.id
             applySmartShuffle(lastPrioritySongIds, startSongId)
         } else {
-            applyMediaItems(songs, startIndex, 0L, playWhenReady = true)
+            applyMediaItems(songs, safeIndex, 0L, playWhenReady = true)
         }
         updateSkipAvailability()
     }
@@ -310,9 +321,11 @@ class ExoPlayerMusicController(
         val playWhenReady = _isPlaying.value
         val startPositionMs = if (currentSongId != null) player.currentPosition else 0L
         playlist = baseList
+        originalPlaylist = baseList
         _isShuffleEnabled.value = false
         player.shuffleModeEnabled = false
         val startIndex = baseList.indexOfFirst { it.id == currentSongId }.coerceAtLeast(0)
+        _queueState.value = PlaybackQueueState(items = baseList, currentIndex = startIndex)
         applyMediaItems(baseList, startIndex, startPositionMs, playWhenReady)
         updateSkipAvailability()
     }
@@ -326,9 +339,11 @@ class ExoPlayerMusicController(
         val startPositionMs = if (currentSongId != null) player.currentPosition else 0L
         val ordered = buildSmartOrder(baseList, prioritySongIds, currentSongId)
         playlist = ordered
+        originalPlaylist = baseList
         _isShuffleEnabled.value = true
         player.shuffleModeEnabled = false
         val startIndex = ordered.indexOfFirst { it.id == currentSongId }.coerceAtLeast(0)
+        _queueState.value = PlaybackQueueState(items = ordered, currentIndex = startIndex)
         applyMediaItems(ordered, startIndex, startPositionMs, playWhenReady)
     }
 
@@ -463,5 +478,124 @@ class ExoPlayerMusicController(
         } catch (e: Exception) {
             Log.e("EQDebug", "Failed to apply audio effects", e)
         }
+    }
+
+    // --- Queue ops ---
+
+    override fun addToQueue(song: Song) {
+        val currentIndex = _queueState.value.currentIndex.coerceAtLeast(0)
+        Log.d(
+            "addQueue",
+            "BEFORE song='${song.title}' id=${song.id} currentIndex=$currentIndex queue=${playlist.map { it.title }}"
+        )
+        val newItems = playlist.toMutableList().apply { add(song) }
+        playlist = newItems
+        originalPlaylist = newItems
+        _queueState.value = PlaybackQueueState(items = newItems, currentIndex = currentIndex)
+        Log.d(
+            "addQueue",
+            "AFTER song='${song.title}' id=${song.id} currentIndex=$currentIndex queue=${newItems.map { it.title }}"
+        )
+        applyMediaItems(newItems, currentIndex.coerceIn(0, newItems.lastIndex), player.currentPosition, _isPlaying.value)
+    }
+
+    override fun addToQueueNext(song: Song) {
+        val currentIndex = _queueState.value.currentIndex
+        val insertIndex = if (currentIndex in playlist.indices) currentIndex + 1 else playlist.size
+        Log.d(
+            "Playnext",
+            "BEFORE song='${song.title}' id=${song.id} currentIndex=$currentIndex insertIndex=$insertIndex queue=${playlist.map { it.title }}"
+        )
+        val newItems = playlist.toMutableList().apply { add(insertIndex.coerceIn(0, size), song) }
+        playlist = newItems
+        originalPlaylist = newItems
+        val newCurrentIndex = if (currentIndex >= 0) currentIndex else 0
+        _queueState.value = PlaybackQueueState(items = newItems, currentIndex = newCurrentIndex)
+        Log.d(
+            "Playnext",
+            "AFTER song='${song.title}' id=${song.id} currentIndex=$newCurrentIndex insertedAt=${insertIndex.coerceIn(0, newItems.lastIndex)} queue=${newItems.map { it.title }}"
+        )
+        applyMediaItems(newItems, newCurrentIndex.coerceIn(0, newItems.lastIndex), player.currentPosition, _isPlaying.value)
+    }
+
+    override fun playQueueIndex(index: Int) {
+        if (playlist.isEmpty()) return
+        val safe = index.coerceIn(0, playlist.lastIndex)
+        checkAndRecordHistory(player.currentPosition)
+        player.seekTo(safe, 0L)
+        player.play()
+        _queueState.value = PlaybackQueueState(items = playlist, currentIndex = safe)
+        updateSkipAvailability()
+    }
+
+    override fun removeQueueIndex(index: Int) {
+        if (playlist.isEmpty()) return
+        val safe = index.coerceIn(0, playlist.lastIndex)
+        val currentIndex = _queueState.value.currentIndex
+        val removingCurrent = safe == currentIndex
+
+        val newItems = playlist.toMutableList().apply { removeAt(safe) }
+        if (newItems.isEmpty()) {
+            stop()
+            playlist = emptyList()
+            originalPlaylist = emptyList()
+            _queueState.value = PlaybackQueueState()
+            return
+        }
+
+        val newCurrentIndex = when {
+            currentIndex < 0 -> 0
+            safe < currentIndex -> (currentIndex - 1).coerceAtLeast(0)
+            removingCurrent -> currentIndex.coerceIn(0, newItems.lastIndex)
+            else -> currentIndex.coerceIn(0, newItems.lastIndex)
+        }
+
+        playlist = newItems
+        originalPlaylist = newItems
+        _queueState.value = PlaybackQueueState(items = newItems, currentIndex = newCurrentIndex)
+
+        applyMediaItems(newItems, newCurrentIndex, if (removingCurrent) 0L else player.currentPosition, _isPlaying.value)
+        if (removingCurrent) player.play()
+    }
+
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        if (playlist.isEmpty()) return
+        val from = fromIndex.coerceIn(0, playlist.lastIndex)
+        val to = toIndex.coerceIn(0, playlist.lastIndex)
+        if (from == to) return
+
+        val list = playlist.toMutableList()
+        val item = list.removeAt(from)
+        list.add(to, item)
+
+        val current = _queueState.value.currentIndex
+        val newCurrent = when (current) {
+            from -> to
+            in minOf(from, to)..maxOf(from, to) -> {
+                when {
+                    from < to && current in (from + 1)..to -> current - 1
+                    from > to && current in to until from -> current + 1
+                    else -> current
+                }
+            }
+            else -> current
+        }.coerceIn(0, list.lastIndex)
+
+        playlist = list
+        originalPlaylist = list
+        _queueState.value = PlaybackQueueState(items = list, currentIndex = newCurrent)
+        applyMediaItems(list, newCurrent, player.currentPosition, _isPlaying.value)
+    }
+
+    override fun clearQueue(keepCurrent: Boolean) {
+        val current = _currentSong.value
+        if (!keepCurrent || current == null) {
+            stop()
+            playlist = emptyList()
+            originalPlaylist = emptyList()
+            _queueState.value = PlaybackQueueState()
+            return
+        }
+        play(current)
     }
 }

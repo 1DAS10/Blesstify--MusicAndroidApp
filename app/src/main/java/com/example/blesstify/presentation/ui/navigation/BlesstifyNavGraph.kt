@@ -5,11 +5,17 @@ import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -23,6 +29,7 @@ import com.example.blesstify.presentation.ui.splash.SplashScreen
 import com.example.blesstify.presentation.ui.login.LoginScreen
 import com.example.blesstify.presentation.ui.register.RegisterScreen
 import com.example.blesstify.presentation.ui.main.MainScreen
+import com.example.blesstify.presentation.ui.main.MiniPlayerBar
 import com.example.blesstify.presentation.ui.player.PlayerScreen
 import com.example.blesstify.presentation.ui.playlist.PlaylistDetailScreen
 import com.example.blesstify.presentation.ui.playlist.CreatePlaylistScreen
@@ -45,6 +52,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.compose.ui.window.DialogProperties
+import com.example.blesstify.presentation.ui.library.edit.AlbumEditorScreen
+import com.example.blesstify.presentation.ui.library.edit.AlbumEditorViewModel
+import com.example.blesstify.presentation.ui.library.edit.ArtistEditorScreen
+import com.example.blesstify.presentation.ui.library.edit.ArtistEditorViewModel
 
 // ============ ANIMATED COMPOSABLE EXTENSION ============
 
@@ -106,6 +117,15 @@ fun BlessifyNavGraph(
 
     // Shared PlayerViewModel — MusicController is a singleton so state is preserved across screens
     val playerViewModel: PlayerViewModel = hiltViewModel()
+    val currentSong by playerViewModel.currentSong.collectAsState()
+    val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val miniPlayerHiddenRoutes = setOf(
+        Screen.Splash.route,
+        Screen.Login.route,
+        Screen.Register.route,
+        Screen.Player.route
+    )
+    val showGlobalMiniPlayer = currentSong != null && currentRoute !in miniPlayerHiddenRoutes
 
     LaunchedEffect(authState.authState, currentRoute) {
         when (authState.authState) {
@@ -137,10 +157,14 @@ fun BlessifyNavGraph(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = Screen.Splash.route
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Splash.route,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = if (showGlobalMiniPlayer && currentRoute != Screen.Main.route) 72.dp else 0.dp)
+        ) {
         composable(
             route = Screen.Splash.route,
             enterTransition = { BlesstifyAnimations.splashFadeIn() },
@@ -213,13 +237,67 @@ fun BlessifyNavGraph(
                 onNavigateToEqualizer = { navController.navigate(Screen.Equalizer.route) },
                 onNavigateToUpload = { navController.navigate(Screen.UploadMusic.route) },
                 onNavigateToCreatePlaylist = { navController.navigate(Screen.CreatePlaylist.route) },
+                onNavigateToCreateAlbum = { navController.navigate(Screen.AlbumEditor.createRoute()) },
+                onNavigateToCreateAlbumWithId = { albumId -> navController.navigate(Screen.AlbumEditor.createRoute(albumId)) },
+                onNavigateToCreateArtist = { navController.navigate(Screen.ArtistEditor.createRoute()) },
+                onNavigateToCreateArtistWithId = { artistId -> navController.navigate(Screen.ArtistEditor.createRoute(artistId)) },
                 onNavigateToAIFocus = { navController.navigate(Screen.AIFocus.route) },
                 onNavigateToNotification = { navController.navigate(Screen.Notification.route) },
                 onNavigateToCategory = { genre -> navController.navigate(Screen.CategoryDetail.createRoute(genre)) },
-                onNavigateToAlbum = { albumName -> navController.navigate(Screen.AlbumDetail.createRoute(albumName)) },
-                onNavigateToArtist = { artistName -> navController.navigate(Screen.ArtistDetail.createRoute(artistName)) },
+                onNavigateToAlbum = { albumId -> navController.navigate(Screen.AlbumDetail.createRoute(albumId)) },
+                onNavigateToArtist = { artistId -> navController.navigate(Screen.ArtistDetail.createRoute(artistId)) },
                 onOpenPlayer = { navController.navigate(Screen.Player.route) },
                 onLogout = { authViewModel.onEvent(AuthUiEvent.SignOut) }
+            )
+        }
+
+        composable(
+            route = Screen.AlbumEditor.route,
+            arguments = listOf(
+                navArgument("albumId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+            enterTransition = { BlesstifyAnimations.slideInFromRight() },
+            exitTransition = { BlesstifyAnimations.slideOutToLeft() },
+            popEnterTransition = { BlesstifyAnimations.slideInFromLeft() },
+            popExitTransition = { BlesstifyAnimations.slideOutToRight() }
+        ) { backStackEntry ->
+            val albumId = backStackEntry.arguments?.getString("albumId")
+            val vm: AlbumEditorViewModel = hiltViewModel()
+
+            AlbumEditorScreen(
+                albumId = albumId,
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.ArtistEditor.route,
+            arguments = listOf(
+                navArgument("artistId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+            enterTransition = { BlesstifyAnimations.slideInFromRight() },
+            exitTransition = { BlesstifyAnimations.slideOutToLeft() },
+            popEnterTransition = { BlesstifyAnimations.slideInFromLeft() },
+            popExitTransition = { BlesstifyAnimations.slideOutToRight() }
+        ) { backStackEntry ->
+            val artistId = backStackEntry.arguments?.getString("artistId")
+            val vm: ArtistEditorViewModel = hiltViewModel()
+
+            ArtistEditorScreen(
+                artistId = artistId,
+                viewModel = vm,
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
         composable(
@@ -266,6 +344,9 @@ fun BlessifyNavGraph(
         ) {
             PlayerScreen(
                 onBack = { navController.popBackStack() },
+                onNavigateToArtist = { artistName ->
+                    navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                },
                 viewModel = playerViewModel
             )
         }
@@ -389,9 +470,9 @@ fun BlessifyNavGraph(
         }
         composable(
             route = Screen.AlbumDetail.route,
-            arguments = listOf(navArgument("albumName") { type = NavType.StringType }),
+            arguments = listOf(navArgument("albumId") { type = NavType.StringType }),
             enterTransition = { BlesstifyAnimations.slideInFromRight() },
-            exitTransition = { 
+            exitTransition = {
                 if (targetState.destination.route == Screen.Player.route) {
                     ExitTransition.None
                 } else {
@@ -407,22 +488,32 @@ fun BlessifyNavGraph(
             },
             popExitTransition = { BlesstifyAnimations.slideOutToRight() }
         ) { backStackEntry ->
-            val albumName = android.net.Uri.decode(backStackEntry.arguments?.getString("albumName") ?: "")
+            val albumId = android.net.Uri.decode(backStackEntry.arguments?.getString("albumId") ?: "")
+            val libraryViewModel: com.example.blesstify.presentation.ui.library.LibraryViewModel = hiltViewModel()
             com.example.blesstify.presentation.ui.library.LibraryDetailScreen(
                 type = "album",
-                name = albumName,
+                itemId = albumId,
                 onBack = { navController.popBackStack() },
                 onNavigateToPlayer = { songs, startIndex ->
                     playerViewModel.playFromList(songs, startIndex, source = "album")
                     navController.navigate(Screen.Player.route)
-                }
+                },
+                onEdit = { navController.navigate(Screen.AlbumEditor.createRoute(albumId)) },
+                onDelete = {
+                    libraryViewModel.deleteAlbumById(albumId) { deleted ->
+                        if (deleted) {
+                            navController.popBackStack()
+                        }
+                    }
+                },
+                viewModel = libraryViewModel
             )
         }
         composable(
             route = Screen.ArtistDetail.route,
-            arguments = listOf(navArgument("artistName") { type = NavType.StringType }),
+            arguments = listOf(navArgument("artistId") { type = NavType.StringType }),
             enterTransition = { BlesstifyAnimations.slideInFromRight() },
-            exitTransition = { 
+            exitTransition = {
                 if (targetState.destination.route == Screen.Player.route) {
                     ExitTransition.None
                 } else {
@@ -438,16 +529,45 @@ fun BlessifyNavGraph(
             },
             popExitTransition = { BlesstifyAnimations.slideOutToRight() }
         ) { backStackEntry ->
-            val artistName = android.net.Uri.decode(backStackEntry.arguments?.getString("artistName") ?: "")
+            val artistId = android.net.Uri.decode(backStackEntry.arguments?.getString("artistId") ?: "")
+            val libraryViewModel: com.example.blesstify.presentation.ui.library.LibraryViewModel = hiltViewModel()
             com.example.blesstify.presentation.ui.library.LibraryDetailScreen(
                 type = "artist",
-                name = artistName,
+                itemId = artistId,
                 onBack = { navController.popBackStack() },
                 onNavigateToPlayer = { songs, startIndex ->
                     playerViewModel.playFromList(songs, startIndex, source = "artist")
                     navController.navigate(Screen.Player.route)
-                }
+                },
+                onEdit = { navController.navigate(Screen.ArtistEditor.createRoute(artistId)) },
+                onDelete = {
+                    libraryViewModel.deleteArtistById(artistId) { deleted ->
+                        if (deleted) {
+                            navController.popBackStack()
+                        }
+                    }
+                },
+                viewModel = libraryViewModel
             )
         }
     }
+
+        if (showGlobalMiniPlayer) {
+            currentSong?.let { song ->
+                MiniPlayerBar(
+                    song = song,
+                    isPlaying = isPlaying,
+                    onPlayPause = { playerViewModel.playPause() },
+                    onPrevious = { playerViewModel.previous() },
+                    onNext = { playerViewModel.next() },
+                    onOpenPlayer = { navController.navigate(Screen.Player.route) },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (currentRoute == Screen.Main.route) 80.dp else 0.dp)
+                        .navigationBarsPadding()
+                )
+            }
+        }
+    }
 }
+

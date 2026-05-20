@@ -1,13 +1,19 @@
 package com.example.blesstify.presentation.player
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.blesstify.core.utils.Resource
+import com.example.blesstify.core.utils.ShareUtils
 import com.example.blesstify.domain.auth.AuthState
+import com.example.blesstify.domain.model.ListeningHistory
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.usecase.AddTrackToPlaylistUseCase
+import com.example.blesstify.domain.usecase.GetEqualizerSettingsUseCase
 import com.example.blesstify.domain.usecase.GetLatestRecommendationUseCase
 import com.example.blesstify.domain.usecase.GetListeningHistoryUseCase
+import com.example.blesstify.domain.usecase.GetUserPlaylistsUseCase
 import com.example.blesstify.domain.usecase.GetPublicSongsUseCase
 import com.example.blesstify.domain.usecase.GetSongsByIdsUseCase
 import com.example.blesstify.domain.usecase.IsLikedUseCase
@@ -15,10 +21,8 @@ import com.example.blesstify.domain.usecase.LikeSongUseCase
 import com.example.blesstify.domain.usecase.LogListeningHistoryUseCase
 import com.example.blesstify.domain.usecase.ObserveAuthStateUseCase
 import com.example.blesstify.domain.usecase.UnlikeSongUseCase
-import com.example.blesstify.domain.usecase.GetEqualizerSettingsUseCase
-import com.example.blesstify.domain.user.UserResult
-import com.example.blesstify.domain.model.ListeningHistory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +36,7 @@ import kotlin.math.min
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     val musicController: MusicController,
+    @ApplicationContext private val appContext: Context,
     private val observeAuthStateUseCase: ObserveAuthStateUseCase,
     private val isLikedUseCase: IsLikedUseCase,
     private val likeSongUseCase: LikeSongUseCase,
@@ -41,7 +46,9 @@ class PlayerViewModel @Inject constructor(
     private val getLatestRecommendationUseCase: GetLatestRecommendationUseCase,
     private val getSongsByIdsUseCase: GetSongsByIdsUseCase,
     private val getPublicSongsUseCase: GetPublicSongsUseCase,
-    private val getEqualizerSettingsUseCase: GetEqualizerSettingsUseCase
+    private val getEqualizerSettingsUseCase: GetEqualizerSettingsUseCase,
+    private val getUserPlaylistsUseCase: GetUserPlaylistsUseCase,
+    private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase
 ) : ViewModel() {
 
     val currentSong = musicController.currentSong
@@ -52,6 +59,7 @@ class PlayerViewModel @Inject constructor(
     val repeatMode = musicController.repeatMode
     val canNext = musicController.canNext
     val canPrevious = musicController.canPrevious
+    val queueState = musicController.queueState
 
     private val _isLiked = MutableStateFlow(false)
     val isLiked = _isLiked.asStateFlow()
@@ -63,6 +71,12 @@ class PlayerViewModel @Inject constructor(
     private val _sleepTimerRemainingMs = MutableStateFlow<Long?>(null)
     val sleepTimerRemainingMs = _sleepTimerRemainingMs.asStateFlow()
 
+    private val _uiEvents = MutableStateFlow<PlayerUiEvent?>(null)
+    val uiEvents = _uiEvents.asStateFlow()
+
+    private val _userPlaylists = MutableStateFlow<List<com.example.blesstify.domain.model.Playlist>>(emptyList())
+    val userPlaylists = _userPlaylists.asStateFlow()
+
     init {
         viewModelScope.launch {
             try {
@@ -71,6 +85,7 @@ class PlayerViewModel @Inject constructor(
                         currentUserId = state.userId
                         observeLikeStatus()
                         loadEqualizerSettings()
+                        refreshUserPlaylists()
                     } else {
                         currentUserId = null
                     }
@@ -125,6 +140,73 @@ class PlayerViewModel @Inject constructor(
             val result = getEqualizerSettingsUseCase(uid)
             if (result is com.example.blesstify.domain.user.UserResult.Success && result.data != null) {
                 musicController.applyEqualizer(result.data)
+            }
+        }
+    }
+
+    private fun refreshUserPlaylists() {
+        val uid = currentUserId ?: return
+        viewModelScope.launch {
+            try {
+                val playlists = getUserPlaylistsUseCase(uid, limit = 100)
+                _userPlaylists.value = playlists
+            } catch (_: Exception) {
+                _userPlaylists.value = emptyList()
+            }
+        }
+    }
+
+    private fun emitMessage(text: String) {
+        _uiEvents.value = PlayerUiEvent.Message(text)
+        // Clear quickly so same message can be emitted again
+        viewModelScope.launch {
+            delay(50)
+            _uiEvents.value = null
+        }
+    }
+
+    // --- More actions (3-dots) ---
+
+    fun shareCurrentSong() {
+        val song = currentSong.value ?: return
+        try {
+            ShareUtils.shareSong(appContext, song)
+        } catch (e: Exception) {
+            emitMessage("Share failed")
+        }
+    }
+
+    fun addCurrentSongToQueue() {
+        val song = currentSong.value ?: return
+        musicController.addToQueue(song)
+        emitMessage("Added to queue")
+    }
+
+    fun playCurrentSongNext() {
+        val song = currentSong.value ?: return
+        musicController.addToQueueNext(song)
+        emitMessage("Will play next")
+    }
+
+
+    fun addCurrentSongToPlaylist(playlistId: String) {
+        val uid = currentUserId ?: run {
+            emitMessage("Please login")
+            return
+        }
+        val song = currentSong.value ?: return
+        viewModelScope.launch {
+            try {
+                val track = com.example.blesstify.domain.model.PlaylistTrack(
+                    songId = song.id,
+                    order = 0,
+                    addedBy = uid
+                )
+                addTrackToPlaylistUseCase(playlistId, track)
+                refreshUserPlaylists()
+                emitMessage("Added to playlist")
+            } catch (_: Exception) {
+                emitMessage("Add to playlist failed")
             }
         }
     }

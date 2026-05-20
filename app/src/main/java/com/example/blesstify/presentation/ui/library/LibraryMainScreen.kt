@@ -1,5 +1,5 @@
 package com.example.blesstify.presentation.ui.library
-
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -40,6 +40,10 @@ fun LibraryMainScreen(
     onUploadClick: () -> Unit,
     onOpenAlbum: (String) -> Unit = {},
     onOpenArtist: (String) -> Unit = {},
+    onCreateAlbum: () -> Unit = {},
+    onCreateArtist: () -> Unit = {},
+    onEditAlbum: (String) -> Unit = {},
+    onEditArtist: (String) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -156,7 +160,7 @@ fun LibraryMainScreen(
                         items(uiState.albums) { album ->
                             AlbumCard(
                                 album = album,
-                                onClick = { onOpenAlbum(album.name) }
+                                onClick = { onOpenAlbum(album.id) }
                             )
                         }
                         if (uiState.albums.isEmpty()) {
@@ -166,7 +170,7 @@ fun LibraryMainScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "No liked albums found.",
+                                        "No albums found.",
                                         color = Color.Gray,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
@@ -178,7 +182,7 @@ fun LibraryMainScreen(
                         items(uiState.artists) { artist ->
                             ArtistCard(
                                 artist = artist,
-                                onClick = { onOpenArtist(artist.name) }
+                                onClick = { onOpenArtist(artist.id) }
                             )
                         }
                         if (uiState.artists.isEmpty()) {
@@ -200,28 +204,46 @@ fun LibraryMainScreen(
             }
         }
 
-        if (selectedTab == "Playlists") {
+        val fabAction: (() -> Unit)? = when (selectedTab) {
+            "Playlists" -> onCreatePlaylist
+            "Albums" -> onCreateAlbum
+            "Artists" -> onCreateArtist
+            else -> null
+        }
+
+        val fabLabel = when (selectedTab) {
+            "Playlists" -> "Create Playlist"
+            "Albums" -> "Create Album"
+            "Artists" -> "Create Artist"
+            else -> "Create"
+        }
+
+        if (fabAction != null) {
             FloatingActionButton(
-                onClick = onCreatePlaylist,
+                onClick = {
+                    Log.d(
+                        com.example.blesstify.data.repository.FirestoreKeys.LIBRARY_TAG,
+                        "[library] fab click selectedTab=$selectedTab label=$fabLabel"
+                    )
+                    try {
+                        fabAction()
+                    } catch (t: Throwable) {
+                        Log.e(
+                            com.example.blesstify.data.repository.FirestoreKeys.LIBRARY_TAG,
+                            "[library] fab action crash selectedTab=$selectedTab label=$fabLabel",
+                            t
+                        )
+                        throw t
+                    }
+                },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 24.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Playlist")
+                Icon(Icons.Default.Add, contentDescription = fabLabel)
             }
-        }
-
-        FloatingActionButton(
-            onClick = onCreatePlaylist,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 24.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Create Playlist")
         }
     }
 }

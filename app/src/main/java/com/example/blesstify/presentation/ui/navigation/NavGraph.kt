@@ -20,11 +20,21 @@ sealed class Screen(val route: String) {
     object CategoryDetail : Screen("category_detail/{genre}") {
         fun createRoute(genre: String) = "category_detail/${Uri.encode(genre)}"
     }
-    object AlbumDetail : Screen("album_detail/{albumName}") {
-        fun createRoute(albumName: String) = "album_detail/${Uri.encode(albumName)}"
+    object AlbumDetail : Screen("album_detail/{albumId}") {
+        fun createRoute(albumId: String) = "album_detail/${Uri.encode(albumId)}"
     }
-    object ArtistDetail : Screen("artist_detail/{artistName}") {
-        fun createRoute(artistName: String) = "artist_detail/${Uri.encode(artistName)}"
+    object ArtistDetail : Screen("artist_detail/{artistId}") {
+        fun createRoute(artistId: String) = "artist_detail/${Uri.encode(artistId)}"
+    }
+
+    object AlbumEditor : Screen("album_editor?albumId={albumId}") {
+        fun createRoute(albumId: String? = null): String =
+            if (albumId.isNullOrBlank()) "album_editor" else "album_editor?albumId=${Uri.encode(albumId)}"
+    }
+
+    object ArtistEditor : Screen("artist_editor?artistId={artistId}") {
+        fun createRoute(artistId: String? = null): String =
+            if (artistId.isNullOrBlank()) "artist_editor" else "artist_editor?artistId=${Uri.encode(artistId)}"
     }
 }
 

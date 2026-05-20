@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -14,56 +17,95 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
 
 /**
- * A reusable detail screen that displays the songs of a specific Album or Artist.
+ * A reusable detail screen that displays metadata + songs of a specific Album or Artist.
  *
  * @param type Either "album" or "artist"
- * @param name The album name or artist name
+ * @param itemId Firestore document id for album/artist
  * @param onBack Navigate back
- * @param onNavigateToPlayer Play the songs list starting from a given index
+ * @param onNavigateToPlayer Play songs list starting from given index
  * @param viewModel shared LibraryViewModel from Hilt
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryDetailScreen(
     type: String,
-    name: String,
+    itemId: String,
     onBack: () -> Unit,
     onNavigateToPlayer: (List<Song>, Int) -> Unit,
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val selectedAlbum = if (type == "album") uiState.albums.find { it.id == itemId } else null
+    val selectedArtist = if (type == "artist") uiState.artists.find { it.id == itemId } else null
+
+    val title = when (type) {
+        "album" -> selectedAlbum?.name ?: "Unknown Album"
+        "artist" -> selectedArtist?.name ?: "Unknown Artist"
+        else -> ""
+    }
 
     val songs: List<Song> = when (type) {
-        "album" -> uiState.albums.find { it.name == name }?.songs ?: emptyList()
-        "artist" -> uiState.artists.find { it.name == name }?.songs ?: emptyList()
+        "album" -> selectedAlbum?.songs ?: emptyList()
+        "artist" -> selectedArtist?.songs ?: emptyList()
         else -> emptyList()
     }
 
     val subtitle = when (type) {
-        "album" -> uiState.albums.find { it.name == name }?.artist ?: ""
+        "album" -> selectedAlbum?.artist.orEmpty()
         "artist" -> "${songs.size} Songs"
         else -> ""
     }
 
     val coverUrl = when (type) {
-        "album" -> uiState.albums.find { it.name == name }?.coverUrl
-        "artist" -> uiState.artists.find { it.name == name }?.coverUrl
+        "album" -> selectedAlbum?.coverUrl
+        "artist" -> selectedArtist?.coverUrl
         else -> null
+    }
+
+    val deleteLabel = if (type == "album") "album" else "artist"
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete ${deleteLabel.replaceFirstChar { it.uppercase() }}") },
+            text = { Text("Are you sure you want to delete \"$title\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -73,6 +115,32 @@ fun LibraryDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.White)
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onEdit()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                showDeleteDialog = true
+                            }
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -86,7 +154,6 @@ fun LibraryDetailScreen(
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            // Header section
             item {
                 Column(
                     modifier = Modifier
@@ -94,7 +161,6 @@ fun LibraryDetailScreen(
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Cover image
                     Box(
                         modifier = Modifier
                             .size(180.dp)
@@ -105,7 +171,7 @@ fun LibraryDetailScreen(
                             .background(Color.White.copy(alpha = 0.06f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (coverUrl != null) {
+                        if (!coverUrl.isNullOrBlank()) {
                             AsyncImage(
                                 model = coverUrl,
                                 contentDescription = null,
@@ -125,7 +191,7 @@ fun LibraryDetailScreen(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Text(
-                        name,
+                        title,
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
@@ -144,7 +210,6 @@ fun LibraryDetailScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Play all button
                     if (songs.isNotEmpty()) {
                         Button(
                             onClick = { onNavigateToPlayer(songs, 0) },
@@ -162,7 +227,6 @@ fun LibraryDetailScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Song count divider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -179,7 +243,6 @@ fun LibraryDetailScreen(
                 }
             }
 
-            // Song list
             if (songs.isEmpty()) {
                 item {
                     Box(
@@ -199,7 +262,9 @@ fun LibraryDetailScreen(
                 itemsIndexed(songs) { index, song ->
                     com.example.blesstify.presentation.ui.main.SongResultItem(
                         song = song,
-                        onClick = { onNavigateToPlayer(songs, index) }
+                        onClick = { onNavigateToPlayer(songs, index) },
+                        onAddToQueue = { viewModel.addSongToQueue(it) },
+                        onPlayNext = { viewModel.playSongNext(it) }
                     )
                     if (index < songs.lastIndex) {
                         Spacer(modifier = Modifier.height(8.dp))

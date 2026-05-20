@@ -8,6 +8,13 @@ enum class RepeatMode {
     NONE, ONE, ALL
 }
 
+data class PlaybackQueueState(
+    val items: List<Song> = emptyList(),
+    val currentIndex: Int = -1
+) {
+    val current: Song? get() = items.getOrNull(currentIndex)
+}
+
 interface MusicController {
     val currentSong: StateFlow<Song?>
     val isPlaying: StateFlow<Boolean>
@@ -21,12 +28,23 @@ interface MusicController {
     val currentSource: String
     val onSongFinished: SharedFlow<Pair<Song, Long>> // Emits (Song, DurationListenedMs) when song should be recorded
 
+    // Manual queue state (for UI + add-to-queue)
+    val queueState: StateFlow<PlaybackQueueState>
+
     fun play(song: Song)
     fun pause()
     fun resume()
     fun seekTo(position: Long)
     fun stop()
-    fun setPlaylist(songs: List<Song>, startIndex: Int = 0, playlistId: String? = null, source: String = "unknown")
+
+    /** Replace queue with [songs], start at [startIndex]. */
+    fun setPlaylist(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        playlistId: String? = null,
+        source: String = "unknown"
+    )
+
     fun next()
     fun previous()
     fun toggleShuffle()
@@ -35,4 +53,12 @@ interface MusicController {
     fun applyEqualizer(settings: com.example.blesstify.domain.model.EqualizerSettings)
     fun enableSmartShuffle(prioritySongIds: List<String>)
     fun disableShuffle()
+
+    // Queue ops
+    fun addToQueue(song: Song)
+    fun addToQueueNext(song: Song)
+    fun playQueueIndex(index: Int)
+    fun removeQueueIndex(index: Int)
+    fun moveQueueItem(fromIndex: Int, toIndex: Int)
+    fun clearQueue(keepCurrent: Boolean = true)
 }

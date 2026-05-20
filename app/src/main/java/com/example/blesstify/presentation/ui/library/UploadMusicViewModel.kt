@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.blesstify.core.utils.Resource
 import com.example.blesstify.domain.model.Song
+import com.example.blesstify.domain.repository.AlbumRepository
+import com.example.blesstify.domain.repository.ArtistRepository
 import com.example.blesstify.domain.usecase.UploadSongUseCase
 import com.example.blesstify.domain.usecase.GetCurrentUserUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,8 +19,17 @@ import javax.inject.Inject
 
 data class UploadUiState(
     val title: String = "",
-    val artist: String = "",
-    val album: String = "",
+
+    // Artist select/create
+    val artist: String = "", // manual entry (new) or mirrors selected
+    val artistId: String? = null,
+    val artistOptions: List<com.example.blesstify.domain.model.Artist> = emptyList(),
+
+    // Album select/create
+    val album: String = "", // manual entry (new) or mirrors selected
+    val albumId: String? = null,
+    val albumOptions: List<com.example.blesstify.domain.model.Album> = emptyList(),
+
     val genres: List<String> = listOf("Other"),
     val audioUri: Uri? = null,
     val audioFileName: String? = null,
@@ -33,8 +44,13 @@ data class UploadUiState(
 
 sealed interface UploadUiEvent {
     data class TitleChanged(val value: String) : UploadUiEvent
+
     data class ArtistChanged(val value: String) : UploadUiEvent
+    data class ArtistSelected(val artistId: String?) : UploadUiEvent
+
     data class AlbumChanged(val value: String) : UploadUiEvent
+    data class AlbumSelected(val albumId: String?) : UploadUiEvent
+
     data class GenreToggled(val value: String) : UploadUiEvent
     data class PublicChanged(val value: Boolean) : UploadUiEvent
     data class AudioSelected(val uri: Uri, val fileName: String) : UploadUiEvent
@@ -45,10 +61,13 @@ sealed interface UploadUiEvent {
     object ClearMessages : UploadUiEvent
 }
 
+
 @HiltViewModel
 class UploadMusicViewModel @Inject constructor(
     private val uploadSongUseCase: UploadSongUseCase,
-    private val getCurrentUserUseCase: GetCurrentUserUseCase
+    private val getCurrentUserUseCase: GetCurrentUserUseCase,
+    private val albumRepository: AlbumRepository,
+    private val artistRepository: ArtistRepository
 ) : ViewModel() {
 
     private val allowedGenres = setOf(
@@ -60,35 +79,65 @@ class UploadMusicViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(UploadUiState())
     val uiState: StateFlow<UploadUiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            runCatching {
+                val artists = artistRepository.getAllArtists()
+                val albums = albumRepository.getAllAlbums()
+                _uiState.update { it.copy(artistOptions = artists, albumOptions = albums) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(errorMessage = "Load albums/artists failed: ${e.message ?: "Unknown"}") }
+            }
+        }
+    }
+
+
     fun onEvent(event: UploadUiEvent) {
         when (event) {
             is UploadUiEvent.TitleChanged -> _uiState.update { it.copy(title = event.value) }
-            is UploadUiEvent.ArtistChanged -> _uiState.update { it.copy(artist = event.value) }
-            is UploadUiEvent.AlbumChanged -> _uiState.update { it.copy(album = event.value) }
+
+            is UploadUiEvent.ArtistChanged -> _uiState.update { it.copy(artist = event.value, artistId = null) }
+            is UploadUiEvent.ArtistSelected -> {
+                val selected = event.artistId?.let { id -> _uiState.value.artistOptions.firstOrNull { it.id == id } }
+                _uiState.update {
+                    it.copy(
+                        artistId = event.artistId,
+                        artist = selected?.name ?: it.artist
+                    )
+                }
+            }
+
+            is UploadUiEvent.AlbumChanged -> _uiState.update { it.copy(album = event.value, albumId = null) }
+            is UploadUiEvent.AlbumSelected -> {
+                val selected = event.albumId?.let { id -> _uiState.value.albumOptions.firstOrNull { it.id == id } }
+                _uiState.update {
+                    it.copy(
+                        albumId = event.albumId,
+                        album = selected?.name ?: it.album
+                    )
+                }
+            }
+
             is UploadUiEvent.GenreToggled -> _uiState.update { state ->
                 val currentGenres = state.genres.toMutableList()
                 if (currentGenres.contains(event.value)) {
-                    // Don't remove if it's the last one? Or just remove.
-                    // If removing the last one, maybe default to "Other"?
                     currentGenres.remove(event.value)
                     if (currentGenres.isEmpty()) currentGenres.add("Other")
                 } else {
                     currentGenres.add(event.value)
-                    // If adding something else and "Other" was the only one, maybe remove "Other"?
-                    if (event.value != "Other" && currentGenres.size > 1 && currentGenres.contains("Other")) {
-                        // Optional: remove "Other" when a specific genre is selected?
-                        // Let's keep it simple for now.
-                    }
                 }
                 state.copy(genres = currentGenres.distinct())
             }
+
             is UploadUiEvent.PublicChanged -> _uiState.update { it.copy(isPublic = event.value) }
             is UploadUiEvent.AudioSelected -> _uiState.update {
                 it.copy(audioUri = event.uri, audioFileName = event.fileName)
             }
+
             is UploadUiEvent.CoverSelected -> _uiState.update {
                 it.copy(coverUri = event.uri, coverFileName = event.fileName)
             }
+
             UploadUiEvent.RemoveCover -> _uiState.update { it.copy(coverUri = null, coverFileName = null) }
             UploadUiEvent.RemoveAudio -> _uiState.update { it.copy(audioUri = null, audioFileName = null) }
             UploadUiEvent.Submit -> submitUpload()
@@ -120,7 +169,9 @@ class UploadMusicViewModel @Inject constructor(
         val song = Song(
             title = state.title.trim(),
             artist = state.artist.trim(),
+            artistId = state.artistId,
             album = state.album.trim().ifBlank { null },
+            albumId = state.albumId,
             genre = finalGenres,
             ownerId = currentUser.id,
             isPublic = state.isPublic,
