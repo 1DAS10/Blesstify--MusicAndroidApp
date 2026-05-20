@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -160,19 +161,6 @@ fun ArtistEditorScreen(
                 }
             }
 
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = state.coverUrl,
-                onValueChange = viewModel::onCoverUrlChange,
-                label = { Text("Photo/Cover URL (optional)") },
-                placeholder = { Text("https://...") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Done,
-                    keyboardType = KeyboardType.Uri
-                )
-            )
-
             Spacer(Modifier.height(8.dp))
 
             Button(
@@ -180,10 +168,23 @@ fun ArtistEditorScreen(
                 enabled = !state.isSaving && !state.isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (state.isSaving) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.height(18.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (state.isSaving) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text("Saving...")
+                    } else {
+                        Spacer(modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(if (artistId.isNullOrBlank()) "Create" else "Save")
+                    }
                 }
-                Text(if (artistId.isNullOrBlank()) "Create" else "Save")
             }
 
             Text(

@@ -137,10 +137,6 @@ fun LibraryMainScreen(
                             )
                         }
 
-                        item {
-                            CreatePlaylistCard(onClick = onCreatePlaylist)
-                        }
-
                         if (uiState.playlists.isEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Box(

@@ -204,23 +204,41 @@ fun BlessifyNavGraph(
         composable(
             route = Screen.Main.route,
             enterTransition = { BlesstifyAnimations.slideInFromRight() },
-            exitTransition = { 
-                // When navigating TO Player, stay in place (no animation)
-                // Otherwise, slide out normally
-                if (targetState.destination.route == Screen.Player.route) {
+            exitTransition = {
+                // When navigating TO Player or bottom-sheet style screens, keep Main in place
+                if (
+                    targetState.destination.route == Screen.Player.route ||
+                    targetState.destination.route == Screen.PlaylistDetail.route ||
+                    targetState.destination.route == Screen.CreatePlaylist.route
+                ) {
                     ExitTransition.None
                 } else {
                     BlesstifyAnimations.slideOutToLeft()
                 }
             },
             popEnterTransition = {
-                if (initialState.destination.route == Screen.Player.route) {
+                // When coming back FROM Player or bottom-sheet style screens, keep Main in place
+                if (
+                    initialState.destination.route == Screen.Player.route ||
+                    initialState.destination.route == Screen.PlaylistDetail.route ||
+                    initialState.destination.route == Screen.CreatePlaylist.route
+                ) {
                     EnterTransition.None
                 } else {
                     BlesstifyAnimations.slideInFromLeft()
                 }
             },
-            popExitTransition = { BlesstifyAnimations.slideOutToRight() }
+            popExitTransition = {
+                if (
+                    targetState.destination.route == Screen.Player.route ||
+                    targetState.destination.route == Screen.PlaylistDetail.route ||
+                    targetState.destination.route == Screen.CreatePlaylist.route
+                ) {
+                    ExitTransition.None
+                } else {
+                    BlesstifyAnimations.slideOutToRight()
+                }
+            }
         ) {
             MainScreen(
                 playerViewModel = playerViewModel,
@@ -353,22 +371,10 @@ fun BlessifyNavGraph(
         composable(
             route = Screen.PlaylistDetail.route,
             arguments = listOf(navArgument("playlistId") { type = NavType.StringType }),
-            enterTransition = { BlesstifyAnimations.slideInFromRight() },
-            exitTransition = { 
-                if (targetState.destination.route == Screen.Player.route) {
-                    ExitTransition.None
-                } else {
-                    BlesstifyAnimations.slideOutToLeft()
-                }
-            },
-            popEnterTransition = {
-                if (initialState.destination.route == Screen.Player.route) {
-                    EnterTransition.None
-                } else {
-                    BlesstifyAnimations.slideInFromLeft()
-                }
-            },
-            popExitTransition = { BlesstifyAnimations.slideOutToRight() }
+            enterTransition = { BlesstifyAnimations.bottomSheetSlideUp() },
+            exitTransition = { BlesstifyAnimations.bottomSheetSlideDown() },
+            popEnterTransition = { BlesstifyAnimations.bottomSheetSlideUp() },
+            popExitTransition = { BlesstifyAnimations.bottomSheetSlideDown() }
         ) {
             PlaylistDetailScreen(
                 onBack = { navController.popBackStack() },

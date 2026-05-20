@@ -91,12 +91,32 @@ fun HeaderSection(brandName: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(top = 24.dp)
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = "Logo",
-            modifier = Modifier.size(72.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .clip(CircleShape)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                )
+                .padding(18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "Logo",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         Text(
             text = brandName,
             style = MaterialTheme.typography.headlineMedium,

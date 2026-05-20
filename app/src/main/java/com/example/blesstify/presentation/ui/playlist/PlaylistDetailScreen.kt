@@ -163,14 +163,6 @@ fun PlaylistDetailScreen(
                                                 photoPickerLauncher.launch("image/*")
                                             }
                                         )
-                                        DropdownMenuItem(
-                                            text = { Text("Add Collaborator", color = Color.White) },
-                                            leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = Color.Gray) },
-                                            onClick = {
-                                                showMenu = false
-                                                viewModel.showCollaboratorDialog()
-                                            }
-                                        )
                                         HorizontalDivider(color = Color.White.copy(0.1f))
                                         DropdownMenuItem(
                                             text = { Text("Delete Playlist", color = Color(0xFFFF6B6B)) },
@@ -379,13 +371,6 @@ fun PlaylistDetailScreen(
             onSave = { t, d, p -> viewModel.updatePlaylistInfo(t, d, p) }
         )
     }
-
-    if (uiState.showCollaboratorDialog) {
-        AddCollaboratorDialog(
-            onDismiss = { viewModel.hideCollaboratorDialog() },
-            onAdd = { viewModel.addCollaborator(it) }
-        )
-    }
 }
 
 @Composable
@@ -433,46 +418,6 @@ fun EditPlaylistDialog(
         confirmButton = {
             Button(onClick = { onSave(title, description, isPublic) }) {
                 Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-fun AddCollaboratorDialog(
-    onDismiss: () -> Unit,
-    onAdd: (String) -> Unit
-) {
-    var uid by remember { mutableStateOf<String>("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1A1D23),
-        title = { Text("Add Collaborator", color = Color.White) },
-        text = {
-            Column {
-                Text("Enter the User ID of the collaborator:", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = uid,
-                    onValueChange = { uid = it },
-                    placeholder = { Text("User UID") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onAdd(uid) }, enabled = uid.isNotBlank()) {
-                Text("Add")
             }
         },
         dismissButton = {

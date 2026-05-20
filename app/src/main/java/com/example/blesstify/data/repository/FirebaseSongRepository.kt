@@ -115,10 +115,11 @@ class FirebaseSongRepository(
             "updatedAt" to FieldValue.serverTimestamp()
         )
 
-        if (!artistId.isNullOrBlank()) data["artistIds"] = listOf(artistId)
-        if (!artistName.isNullOrBlank()) data["artistNames"] = listOf(artistName)
-
+        // IMPORTANT: Never overwrite multi-artist album metadata from editor.
+        // Only initialize artistIds/artistNames on album creation.
         if (!existing.exists()) {
+            if (!artistId.isNullOrBlank()) data["artistIds"] = listOf(artistId)
+            if (!artistName.isNullOrBlank()) data["artistNames"] = listOf(artistName)
             data["createdAt"] = FieldValue.serverTimestamp()
         }
 
@@ -209,10 +210,16 @@ class FirebaseSongRepository(
         coverFileName: String?,
         song: Song
     ): Flow<Resource<String>> = flow {
+        val traceTag = "SongUploadTrace"
         emit(Resource.Loading())
+
         // Step 1: Generate a new song document ID
         val songDocRef = firestore.collection(FirestoreKeys.SONGS).document()
         val newSongId = songDocRef.id
+        Log.d(
+            traceTag,
+            "START songId=$newSongId ownerId=${song.ownerId} title=${song.title} artist=${song.artist} album=${song.album}"
+        )
 
         // Step 2: Create uploadJob with status "uploading"
         val audioPath = "songs/$newSongId/audio/$audioFileName"
@@ -228,12 +235,14 @@ class FirebaseSongRepository(
             "updatedAt" to FieldValue.serverTimestamp()
         )
         val jobRef = firestore.collection(FirestoreKeys.UPLOAD_JOBS).add(uploadJobMap).await()
+        Log.d(traceTag, "UPLOAD_JOB_CREATED jobId=${jobRef.id} songId=$newSongId audioPath=$audioPath coverPath=$coverPath")
 
         try {
             // Step 3: Upload audio to Storage
             val audioRef = storage.reference.child(audioPath)
             audioRef.putFile(audioUri).await()
             val audioDownloadUrl = audioRef.downloadUrl.await().toString()
+            Log.d(traceTag, "AUDIO_UPLOAD_OK songId=$newSongId audioUrl=$audioDownloadUrl")
 
             var coverDownloadUrl: String? = null
             var thumbnailDownloadUrl: String? = null
@@ -241,6 +250,7 @@ class FirebaseSongRepository(
                 val coverRef = storage.reference.child(coverPath)
                 coverRef.putFile(coverUri).await()
                 coverDownloadUrl = coverRef.downloadUrl.await().toString()
+                Log.d(traceTag, "COVER_UPLOAD_OK songId=$newSongId coverUrl=$coverDownloadUrl")
 
                 val thumbnailBytes = SongImageUtils.createThumbnailBytes(context, coverUri)
                 if (thumbnailBytes != null) {
@@ -248,21 +258,30 @@ class FirebaseSongRepository(
                     val thumbnailRef = storage.reference.child(thumbnailPath)
                     thumbnailRef.putBytes(thumbnailBytes).await()
                     thumbnailDownloadUrl = thumbnailRef.downloadUrl.await().toString()
+                    Log.d(traceTag, "THUMBNAIL_UPLOAD_OK songId=$newSongId thumbnailPath=$thumbnailPath thumbnailUrl=$thumbnailDownloadUrl")
+                } else {
+                    Log.w(traceTag, "THUMBNAIL_SKIPPED songId=$newSongId reason=createThumbnailBytes returned null")
                 }
+            } else {
+                Log.d(traceTag, "COVER_SKIPPED songId=$newSongId reason=no cover input")
             }
 
             // Step 4: Upsert normalized artist/album collections
+            val isNewArtist = song.artistId.isNullOrBlank()
+            val isNewAlbum = song.albumId.isNullOrBlank()
+
             val finalArtistId = song.artistId?.takeIf { it.isNotBlank() }
                 ?: SlugUtils.slugify(song.artist)
 
             val finalAlbumId = song.albumId?.takeIf { !it.isNullOrBlank() }
-                ?: song.album?.takeIf { it.isNotBlank() }?.let { SlugUtils.slugify("${song.artist}-${it}") }
+                ?: song.album?.takeIf { it.isNotBlank() }?.let { SlugUtils.slugify(it) }
 
             runCatching {
                 upsertArtist(
                     artistId = finalArtistId,
                     artistName = song.artist,
-                    coverUrl = song.artistCoverUrl ?: coverDownloadUrl
+                    // Requirement: if user typed new artist, create doc with coverUrl = null
+                    coverUrl = if (isNewArtist) null else (song.artistCoverUrl)
                 )
 
                 if (!finalAlbumId.isNullOrBlank() && !song.album.isNullOrBlank()) {
@@ -271,11 +290,15 @@ class FirebaseSongRepository(
                         albumName = song.album,
                         artistId = finalArtistId,
                         artistName = song.artist,
-                        coverUrl = song.albumCoverUrl ?: coverDownloadUrl
+                        // Requirement: if user typed new album, create doc with coverUrl = null
+                        coverUrl = if (isNewAlbum) null else (song.albumCoverUrl)
                     )
                 }
             }.onFailure { e ->
                 Log.w("FirebaseSongRepo", "Upsert album/artist failed (non-fatal): ${e.message}")
+                Log.w(traceTag, "UPSERT_ARTIST_ALBUM_FAILED songId=$newSongId error=${e.message}")
+            }.onSuccess {
+                Log.d(traceTag, "UPSERT_ARTIST_ALBUM_OK songId=$newSongId artistId=$finalArtistId albumId=$finalAlbumId")
             }
 
             val artistIds = if (song.artistIds.isNotEmpty()) song.artistIds else listOf(finalArtistId)
@@ -307,7 +330,15 @@ class FirebaseSongRepository(
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
+            Log.d(traceTag, "SONG_DOC_WRITE_START songId=$newSongId ownerId=${song.ownerId} fields=${songMap.keys}")
             songDocRef.set(songMap).await()
+            Log.d(traceTag, "SONG_DOC_WRITE_OK songId=$newSongId")
+
+            val verifySnapshot = songDocRef.get().await()
+            Log.d(
+                traceTag,
+                "SONG_DOC_VERIFY songId=$newSongId exists=${verifySnapshot.exists()} title=${verifySnapshot.getString("title")} ownerId=${verifySnapshot.getString("ownerId")}"
+            )
 
             // Step 6: Update uploadJob to completed
             jobRef.update(
@@ -317,9 +348,11 @@ class FirebaseSongRepository(
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
+            Log.d(traceTag, "UPLOAD_JOB_COMPLETED jobId=${jobRef.id} songId=$newSongId")
 
             emit(Resource.Success(newSongId))
         } catch (e: Exception) {
+            Log.e(traceTag, "UPLOAD_FAILED songId=$newSongId error=${e.message}", e)
             // On failure, update uploadJob to failed
             try {
                 jobRef.update(
@@ -329,11 +362,15 @@ class FirebaseSongRepository(
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
-            } catch (_: Exception) { /* best effort */ }
+                Log.d(traceTag, "UPLOAD_JOB_MARKED_FAILED jobId=${jobRef.id} songId=$newSongId")
+            } catch (jobError: Exception) {
+                Log.e(traceTag, "UPLOAD_JOB_UPDATE_FAILED jobId=${jobRef.id} songId=$newSongId error=${jobError.message}", jobError)
+            }
             Log.e("FirebaseSongRepo", "Upload failed: ${e.message}", e)
             emit(Resource.Error(AppError.Unknown(e.message)))
         }
     }
+
 
     override fun searchSongs(query: String, userId: String?): Flow<Resource<List<Song>>> = flow {
         emit(Resource.Loading())

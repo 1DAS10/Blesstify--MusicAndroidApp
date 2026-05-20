@@ -92,18 +92,6 @@ class LibraryViewModel @Inject constructor(
 
                 val allSongs = (ownSongs + likedSongs).distinctBy { it.id }
 
-                val songDerivedAlbums = allSongs.groupBy { it.album }
-                    .filterKeys { !it.isNullOrBlank() }
-                    .map { (albumName, albumSongs) ->
-                        LibraryAlbum(
-                            id = albumName.orEmpty(),
-                            name = albumName ?: "Unknown",
-                            artist = albumSongs.first().artist,
-                            coverUrl = albumSongs.firstOrNull { it.coverUrl != null }?.coverUrl,
-                            songs = albumSongs
-                        )
-                    }
-
                 val firestoreLibraryAlbums = firestoreAlbums.map { album ->
                     val matchedSongs = allSongs.filter { song ->
                         song.id in album.songIds || song.album.equals(album.name, ignoreCase = true)
@@ -119,19 +107,7 @@ class LibraryViewModel @Inject constructor(
                     )
                 }
 
-                val albums = (firestoreLibraryAlbums + songDerivedAlbums)
-                    .distinctBy { it.id.ifBlank { it.name.lowercase() } }
-
-                val songDerivedArtists = allSongs.groupBy { it.artist }
-                    .filterKeys { it.isNotBlank() }
-                    .map { (artistName, artistSongs) ->
-                        LibraryArtist(
-                            id = artistName,
-                            name = artistName,
-                            coverUrl = artistSongs.firstOrNull { it.coverUrl != null }?.coverUrl,
-                            songs = artistSongs
-                        )
-                    }
+                val albums = firestoreLibraryAlbums
 
                 val firestoreLibraryArtists = firestoreArtists.map { artist ->
                     val matchedSongs = allSongs.filter { song ->
@@ -145,8 +121,7 @@ class LibraryViewModel @Inject constructor(
                     )
                 }
 
-                val artists = (firestoreLibraryArtists + songDerivedArtists)
-                    .distinctBy { it.id.ifBlank { it.name.lowercase() } }
+                val artists = firestoreLibraryArtists
 
                 Log.d(
                     FirestoreKeys.LIBRARY_TAG,

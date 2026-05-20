@@ -256,15 +256,25 @@ class FirebasePlaylistRepository(
         val path = "playlists/$playlistId/covers/$fileName"
         val ref = storage.reference.child(path)
 
-        ref.putFile(uri).await()
-        val downloadUrl = ref.downloadUrl.await().toString()
+        Log.d(TAG, "[uploadPlaylistCover] start playlistId=$playlistId uri=$uri path=$path")
+        try {
+            ref.putFile(uri).await()
+            Log.d(TAG, "[uploadPlaylistCover] putFile success path=$path")
 
-        firestore.collection(FirestoreKeys.PLAYLISTS)
-            .document(playlistId)
-            .update("coverUrl", downloadUrl, "updatedAt", FieldValue.serverTimestamp())
-            .await()
+            val downloadUrl = ref.downloadUrl.await().toString()
+            Log.d(TAG, "[uploadPlaylistCover] downloadUrl=$downloadUrl")
 
-        return downloadUrl
+            firestore.collection(FirestoreKeys.PLAYLISTS)
+                .document(playlistId)
+                .update("coverUrl", downloadUrl, "updatedAt", FieldValue.serverTimestamp())
+                .await()
+
+            Log.d(TAG, "[uploadPlaylistCover] firestore update success playlistId=$playlistId")
+            return downloadUrl
+        } catch (e: Exception) {
+            Log.e(TAG, "[uploadPlaylistCover] failed playlistId=$playlistId: ${e.message}", e)
+            throw e
+        }
     }
 
     override suspend fun likePlaylist(userId: String, playlistId: String) {

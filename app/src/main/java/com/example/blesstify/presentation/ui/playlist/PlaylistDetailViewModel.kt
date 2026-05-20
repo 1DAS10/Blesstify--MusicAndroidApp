@@ -1,6 +1,7 @@
 package com.example.blesstify.presentation.ui.playlist
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,6 +25,7 @@ import com.example.blesstify.domain.usecase.UploadPlaylistCoverUseCase
 import com.example.blesstify.presentation.player.MusicController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -77,6 +79,10 @@ class PlaylistDetailViewModel @Inject constructor(
     private val isPlaylistLikedUseCase: IsPlaylistLikedUseCase,
     private val musicController: MusicController
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "PlaylistDetailVM"
+    }
 
     private val playlistId: String = savedStateHandle.get<String>("playlistId") ?: ""
     private val currentUserId = getCurrentUserUseCase()?.id ?: ""
@@ -223,13 +229,45 @@ class PlaylistDetailViewModel @Inject constructor(
     }
 
     fun uploadCover(uri: Uri) {
+        Log.d(TAG, "[uploadCover] start playlistId=$playlistId uri=$uri")
+        if (playlistId.isBlank()) {
+            Log.e(TAG, "[uploadCover] fail: playlistId blank")
+            _uiState.value = _uiState.value.copy(error = "Missing playlist id")
+            return
+        }
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
-                uploadPlaylistCoverUseCase(playlistId, uri)
-                loadPlaylist()
+                val oldUrl = _uiState.value.playlist?.coverUrl
+                Log.d(TAG, "[uploadCover] oldCoverUrl=$oldUrl")
+
+                // Some devices cancel coroutine after picker returns.
+                // Force upload to complete.
+                kotlinx.coroutines.withContext(NonCancellable) {
+                    val newUrl = uploadPlaylistCoverUseCase(playlistId, uri)
+                    Log.d(TAG, "[uploadCover] useCase success newUrl=$newUrl")
+
+                    val current = _uiState.value.playlist
+                    if (current != null) {
+                        _uiState.value = _uiState.value.copy(
+                            playlist = current.copy(coverUrl = newUrl),
+                            isLoading = false
+                        )
+                        Log.d(TAG, "[uploadCover] uiState updated coverUrl=${_uiState.value.playlist?.coverUrl}")
+                    } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        Log.w(TAG, "[uploadCover] playlist null in uiState, skip optimistic update")
+                    }
+                }
+
+                Log.d(TAG, "[uploadCover] done")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.e(TAG, "[uploadCover] cancelled: ${e.message}", e)
+                // Ensure spinner stops
+                _uiState.value = _uiState.value.copy(isLoading = false)
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = "Upload failed")
+                Log.e(TAG, "[uploadCover] error: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(isLoading = false, error = "Upload failed: ${e.message}")
             }
         }
     }
