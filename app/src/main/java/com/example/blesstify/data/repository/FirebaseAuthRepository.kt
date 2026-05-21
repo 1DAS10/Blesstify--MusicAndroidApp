@@ -6,6 +6,7 @@ import com.example.blesstify.domain.auth.AuthState
 import com.example.blesstify.domain.auth.AuthUser
 import com.example.blesstify.core.error.AppError
 import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.auth.FacebookAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -95,6 +96,18 @@ class FirebaseAuthRepository(
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val userId = result.user?.uid ?: error("Missing user after Google sign in")
+            emit(AuthResult.Success(userId))
+        } catch (exception: Exception) {
+            emit(AuthResult.Error(mapAuthException(exception)))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun signInWithFacebook(accessToken: String): Flow<AuthResult> = flow {
+        emit(AuthResult.Loading)
+        try {
+            val credential = FacebookAuthProvider.getCredential(accessToken)
+            val result = auth.signInWithCredential(credential).await()
+            val userId = result.user?.uid ?: error("Missing user after Facebook sign in")
             emit(AuthResult.Success(userId))
         } catch (exception: Exception) {
             emit(AuthResult.Error(mapAuthException(exception)))

@@ -36,12 +36,15 @@ sealed interface AuthUiEvent {
     object ClearError : AuthUiEvent
     data class SubmitGoogle(val idToken: String) : AuthUiEvent
     data class GoogleSignInFailed(val message: String?) : AuthUiEvent
+    data class SubmitFacebook(val accessToken: String) : AuthUiEvent
+    data class FacebookSignInFailed(val message: String?) : AuthUiEvent
 }
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val signInUseCase: SignInUseCase,
     private val signInWithGoogleUseCase: SignInWithGoogleUseCase,
+    private val signInWithFacebookUseCase: SignInWithFacebookUseCase,
     private val signUpUseCase: SignUpUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val observeAuthStateUseCase: ObserveAuthStateUseCase,
@@ -75,6 +78,10 @@ class AuthViewModel @Inject constructor(
             AuthUiEvent.SignOut -> submitSignOut()
             is AuthUiEvent.SubmitGoogle -> submitGoogle(event.idToken)
             is AuthUiEvent.GoogleSignInFailed -> _uiState.update {
+                it.copy(error = AppError.Unknown(event.message))
+            }
+            is AuthUiEvent.SubmitFacebook -> submitFacebook(event.accessToken)
+            is AuthUiEvent.FacebookSignInFailed -> _uiState.update {
                 it.copy(error = AppError.Unknown(event.message))
             }
         }
@@ -113,6 +120,13 @@ class AuthViewModel @Inject constructor(
     private fun submitGoogle(idToken: String) {
         viewModelScope.launch {
             signInWithGoogleUseCase(idToken)
+                .collectLatest { result -> handleAuthResult(result) }
+        }
+    }
+
+    private fun submitFacebook(accessToken: String) {
+        viewModelScope.launch {
+            signInWithFacebookUseCase(accessToken)
                 .collectLatest { result -> handleAuthResult(result) }
         }
     }

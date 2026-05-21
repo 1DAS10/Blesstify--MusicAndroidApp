@@ -21,6 +21,7 @@ import com.example.blesstify.domain.usecase.LikeSongUseCase
 import com.example.blesstify.domain.usecase.LogListeningHistoryUseCase
 import com.example.blesstify.domain.usecase.ObserveAuthStateUseCase
 import com.example.blesstify.domain.usecase.UnlikeSongUseCase
+import com.example.blesstify.domain.repository.ArtistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -48,7 +49,8 @@ class PlayerViewModel @Inject constructor(
     private val getPublicSongsUseCase: GetPublicSongsUseCase,
     private val getEqualizerSettingsUseCase: GetEqualizerSettingsUseCase,
     private val getUserPlaylistsUseCase: GetUserPlaylistsUseCase,
-    private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase
+    private val addTrackToPlaylistUseCase: AddTrackToPlaylistUseCase,
+    private val artistRepository: ArtistRepository
 ) : ViewModel() {
 
     val currentSong = musicController.currentSong
@@ -208,6 +210,19 @@ class PlayerViewModel @Inject constructor(
             } catch (_: Exception) {
                 emitMessage("Add to playlist failed")
             }
+        }
+    }
+
+    suspend fun resolveArtistIdByName(artistName: String): String? {
+        val cleanName = artistName.trim()
+        if (cleanName.isBlank()) return null
+        return try {
+            artistRepository.getAllArtists(limit = 200)
+                .firstOrNull { it.name.equals(cleanName, ignoreCase = true) }
+                ?.id
+        } catch (e: Exception) {
+            Log.e("PlayerVM", "[artistNav] resolve failed name=$cleanName", e)
+            null
         }
     }
 

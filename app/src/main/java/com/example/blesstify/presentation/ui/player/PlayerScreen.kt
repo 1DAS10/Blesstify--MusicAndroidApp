@@ -53,7 +53,8 @@ import androidx.compose.foundation.clickable
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
-    onNavigateToArtist: (String) -> Unit = {},
+    onNavigateToArtist: (artistId: String?, artistName: String?) -> Unit = { _, _ -> },
+    onNavigateToSongEditor: (String) -> Unit = {},
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val currentSong by viewModel.currentSong.collectAsState()
@@ -540,9 +541,31 @@ fun PlayerScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.03f))
                         .clickable(enabled = currentSong?.artist?.isNotBlank() == true) {
-                            val artistName = currentSong?.artist ?: return@clickable
-                            onNavigateToArtist(artistName)
+                            val song = currentSong ?: return@clickable
+                            onNavigateToArtist(song.artistId, song.artist)
                             showMoreSheet = false
+                        },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Edit song") },
+                    supportingContent = { Text("Update title, artist, and genre", color = Color.White.copy(alpha = 0.65f)) },
+                    leadingContent = {
+                        Surface(shape = RoundedCornerShape(14.dp), color = Color.White.copy(alpha = 0.08f)) {
+                            Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Edit, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .clickable(enabled = currentSong?.id?.isNotBlank() == true) {
+                            val songId = currentSong?.id ?: return@clickable
+                            showMoreSheet = false
+                            onNavigateToSongEditor(songId)
                         },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )

@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.example.blesstify.domain.model.Song
 import com.example.blesstify.domain.model.listArtworkUrl
 import java.util.Locale
+import androidx.compose.material.icons.filled.Edit
 
 @Composable
 fun SearchScreen(
@@ -415,7 +416,8 @@ fun SongResultItem(
     song: Song,
     onClick: () -> Unit,
     onAddToQueue: ((Song) -> Unit)? = null,
-    onPlayNext: ((Song) -> Unit)? = null
+    onPlayNext: ((Song) -> Unit)? = null,
+    onEditSong: ((Song) -> Unit)? = null
 ) {
     var showMenu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
@@ -490,6 +492,23 @@ fun SongResultItem(
                         onDismissRequest = { showMenu = false },
                         modifier = Modifier.background(Color(0xFF1A1D23))
                     ) {
+                        if (onEditSong != null) {
+                            DropdownMenuItem(
+                                text = { Text("Edit info", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        null,
+                                        tint = Color.Gray
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    onEditSong(song)
+                                }
+                            )
+                        }
+
                         DropdownMenuItem(
                             text = { Text("Add to queue", color = Color.White) },
                             leadingIcon = { Icon(Icons.Default.QueueMusic, null, tint = Color.Gray) },

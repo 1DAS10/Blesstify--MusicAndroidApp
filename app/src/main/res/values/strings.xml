@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Blesstify</string>
+
+    <!-- Replace these with values from Facebook Developer Console. -->
+    <string name="facebook_app_id">869777305396475</string>
+    <string name="facebook_client_token">645a68557e1b27bf6c9c4f5de361d550</string>
+    <string name="fb_login_protocol_scheme">fb869777305396475</string>
 </resources>

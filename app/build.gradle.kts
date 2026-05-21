@@ -66,6 +66,9 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
 
+    // Facebook Login
+    implementation("com.facebook.android:facebook-login:17.0.2")
+
     // Media3 (ExoPlayer)
     val media3Version = "1.3.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")

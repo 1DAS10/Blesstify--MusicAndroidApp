@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.blesstify.domain.auth.AuthState
 import com.example.blesstify.presentation.auth.AuthUiEvent
 import com.example.blesstify.presentation.auth.AuthViewModel
+import kotlinx.coroutines.launch
 import com.example.blesstify.presentation.player.PlayerViewModel
 import com.example.blesstify.presentation.ui.theme.BlesstifyAnimations
 import androidx.compose.animation.EnterTransition
@@ -319,6 +321,25 @@ fun BlessifyNavGraph(
             )
         }
         composable(
+            route = Screen.SongEditor.route,
+            arguments = listOf(
+                navArgument("songId") {
+                    type = NavType.StringType
+                }
+            ),
+            enterTransition = { BlesstifyAnimations.slideInFromRight() },
+            exitTransition = { BlesstifyAnimations.slideOutToLeft() },
+            popEnterTransition = { BlesstifyAnimations.slideInFromLeft() },
+            popExitTransition = { BlesstifyAnimations.slideOutToRight() }
+        ) { backStackEntry ->
+            val songId = backStackEntry.arguments?.getString("songId").orEmpty()
+            com.example.blesstify.presentation.ui.song.SongEditorScreen(
+                songId = songId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
             route = Screen.Notification.route,
             enterTransition = { BlesstifyAnimations.slideInFromRight() },
             exitTransition = { 
@@ -360,10 +381,20 @@ fun BlessifyNavGraph(
                 decorFitsSystemWindows = false
             )
         ) {
+            val coroutineScope = rememberCoroutineScope()
             PlayerScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToArtist = { artistName ->
-                    navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                onNavigateToArtist = { artistId, artistName ->
+                    coroutineScope.launch {
+                        val targetArtistId = artistId?.takeIf { it.isNotBlank() }
+                            ?: artistName?.let { playerViewModel.resolveArtistIdByName(it) }
+                        if (!targetArtistId.isNullOrBlank()) {
+                            navController.navigate(Screen.ArtistDetail.createRoute(targetArtistId))
+                        }
+                    }
+                },
+                onNavigateToSongEditor = { songId ->
+                    navController.navigate(Screen.SongEditor.createRoute(songId))
                 },
                 viewModel = playerViewModel
             )

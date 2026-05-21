@@ -36,6 +36,10 @@ sealed class Screen(val route: String) {
         fun createRoute(artistId: String? = null): String =
             if (artistId.isNullOrBlank()) "artist_editor" else "artist_editor?artistId=${Uri.encode(artistId)}"
     }
+
+    object SongEditor : Screen("song_editor/{songId}") {
+        fun createRoute(songId: String): String = "song_editor/${Uri.encode(songId)}"
+    }
 }
 
 sealed class MainTab(val route: String, val label: String) {

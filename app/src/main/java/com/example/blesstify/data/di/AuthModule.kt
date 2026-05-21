@@ -31,6 +31,10 @@ object AuthModule {
         SignInWithGoogleUseCase(authRepository)
 
     @Provides
+    fun provideSignInWithFacebookUseCase(authRepository: AuthRepository): SignInWithFacebookUseCase =
+        SignInWithFacebookUseCase(authRepository)
+
+    @Provides
     fun provideSignUpUseCase(authRepository: AuthRepository): SignUpUseCase =
         SignUpUseCase(authRepository)
 
